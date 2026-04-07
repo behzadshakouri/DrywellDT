@@ -24,22 +24,31 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTimer>
-#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 using namespace std;
 
 namespace {
 
+struct StateVarExport
+{
+    string variable;
+    string outputPath;
+};
+
 struct AppOptions
 {
     string scriptFile;
     string weatherFile;
-    string stateFile;
+    string runnerStateFile;
+    string loadModelJson;
+    string saveModelJson;
     int runDays = 1;
     bool watchDaily = false;
+    vector<StateVarExport> stateVarExports;
 };
 
 bool SaveJsonToFile(const QJsonObject &obj, const QString &path)
@@ -101,10 +110,13 @@ void PrintUsage()
     cout << "Usage:\n"
          << "  OpenHydroQual-Console <script_file> [options]\n\n"
          << "Options:\n"
-         << "  --weather <file.json>   Weather inputs with a 'days' array\n"
-         << "  --state <file.json>     Save/load model run state\n"
-         << "  --days <n>              Number of day-solves to run immediately\n"
-         << "  --watch-daily           Keep process running and solve every 24h\n"
+         << "  --weather <file.json>                 Weather inputs with a 'days' array\n"
+         << "  --state <file.json>                   Save/load runner state\n"
+         << "  --load-model-json <model.json>        Load model from json instead of script\n"
+         << "  --save-model-json <model.json>        Save model json after build/load\n"
+         << "  --save-state-variable <var=path.json> Save state variable to json (repeatable)\n"
+         << "  --days <n>                            Number of day-solves to run immediately\n"
+         << "  --watch-daily                         Keep process running and solve every 24h\n"
          << endl;
 }
 
@@ -122,6 +134,19 @@ bool ParsePositiveInt(const string &input, int &value)
     {
         return false;
     }
+}
+
+bool ParseStateVarExport(const string &raw, StateVarExport &entry)
+{
+    const size_t splitPos = raw.find('=');
+    if (splitPos == string::npos || splitPos == 0 || splitPos + 1 >= raw.size())
+    {
+        return false;
+    }
+
+    entry.variable = raw.substr(0, splitPos);
+    entry.outputPath = raw.substr(splitPos + 1);
+    return true;
 }
 
 bool ParseArgs(int argc, char *argv[], AppOptions &options)
@@ -143,7 +168,25 @@ bool ParseArgs(int argc, char *argv[], AppOptions &options)
         }
         else if (arg == "--state" && i + 1 < argc)
         {
-            options.stateFile = argv[++i];
+            options.runnerStateFile = argv[++i];
+        }
+        else if (arg == "--load-model-json" && i + 1 < argc)
+        {
+            options.loadModelJson = argv[++i];
+        }
+        else if (arg == "--save-model-json" && i + 1 < argc)
+        {
+            options.saveModelJson = argv[++i];
+        }
+        else if (arg == "--save-state-variable" && i + 1 < argc)
+        {
+            StateVarExport entry;
+            if (!ParseStateVarExport(argv[++i], entry))
+            {
+                cerr << "--save-state-variable requires format var=path.json\n";
+                return false;
+            }
+            options.stateVarExports.push_back(entry);
         }
         else if (arg == "--days" && i + 1 < argc)
         {
@@ -174,7 +217,7 @@ bool ParseArgs(int argc, char *argv[], AppOptions &options)
     return true;
 }
 
-QJsonObject BuildNextState(const AppOptions &options, const QString &lastRunDate, int totalRuns, const QString &lastOutputFile)
+QJsonObject BuildRunnerState(const AppOptions &options, const QString &lastRunDate, int totalRuns, const QString &lastOutputFile)
 {
     QJsonObject state;
     state["script"] = QString::fromStdString(options.scriptFile);
@@ -187,13 +230,26 @@ QJsonObject BuildNextState(const AppOptions &options, const QString &lastRunDate
     return state;
 }
 
+void PersistModelArtifacts(System *system, const AppOptions &options)
+{
+    if (!options.saveModelJson.empty())
+    {
+        system->SavetoJson(options.saveModelJson, system->addedtemplates, false, true);
+    }
+
+    for (const auto &entry : options.stateVarExports)
+    {
+        system->SaveStateVariableToJson(entry.variable, entry.outputPath);
+    }
+}
+
 bool BuildAndSolveSystem(const AppOptions &options, const QString &solveDateIso, const QJsonObject &weatherForDay, QString &outputFilePath)
 {
-    cout << "Input file: " << options.scriptFile << endl;
     unique_ptr<System> system(new System());
-    cout << "Reading script ..." << endl;
+    cout << "Input file: " << options.scriptFile << endl;
 
     const string defaulttemppath = qApp->applicationDirPath().toStdString() + "/../../resources/";
+    const string settingfilename = defaulttemppath + "settings.json";
     cout << "Default Template path = " + defaulttemppath + "\n";
 
     const QString scriptPath = QString::fromStdString(options.scriptFile);
@@ -207,12 +263,20 @@ bool BuildAndSolveSystem(const AppOptions &options, const QString &solveDateIso,
     system->SetDefaultTemplatePath(defaulttemppath);
     system->SetWorkingFolder(scriptFile.canonicalPath().toStdString() + "/");
 
-    const string settingfilename = qApp->applicationDirPath().toStdString() + "/../../resources/settings.json";
-    Script scr(options.scriptFile, system.get());
+    cout << "Preparing model ..." << endl;
+    if (!options.loadModelJson.empty())
+    {
+        system->ReadSystemSettingsTemplate(settingfilename);
+        system->LoadfromJson(QString::fromStdString(options.loadModelJson));
+    }
+    else
+    {
+        Script scr(options.scriptFile, system.get());
+        system->CreateFromScript(scr, settingfilename);
+    }
 
-    cout << "Executing script ..." << endl;
-    system->CreateFromScript(scr, settingfilename);
     system->SetSilent(false);
+    system->CalcAllInitialValues();
 
     cout << "Solving daily period for " << solveDateIso.toStdString() << " ..." << endl;
     if (!weatherForDay.isEmpty())
@@ -229,10 +293,12 @@ bool BuildAndSolveSystem(const AppOptions &options, const QString &solveDateIso,
     }
 
     system->Solve();
+
     outputFilePath = QString::fromStdString(system->GetWorkingFolder() + system->OutputFileName());
-    cout << "Writing outputs in '" << outputFilePath.toStdString() << "'";
+    cout << "Writing outputs in '" << outputFilePath.toStdString() << "'" << endl;
     system->GetOutputs().write(outputFilePath.toStdString());
 
+    PersistModelArtifacts(system.get(), options);
     return true;
 }
 
@@ -251,8 +317,8 @@ int main(int argc, char *argv[])
     const QString weatherPath = QString::fromStdString(options.weatherFile);
     const QJsonArray weatherDays = LoadWeatherArray(weatherPath);
 
-    const QString statePath = QString::fromStdString(options.stateFile);
-    const QJsonObject loadedState = LoadJsonFromFile(statePath);
+    const QString runnerStatePath = QString::fromStdString(options.runnerStateFile);
+    const QJsonObject loadedState = LoadJsonFromFile(runnerStatePath);
 
     QDate solveDate = QDate::currentDate();
     if (loadedState.contains("next_run_date"))
@@ -278,10 +344,10 @@ int main(int argc, char *argv[])
         }
 
         ++totalRuns;
-        const QJsonObject updatedState = BuildNextState(options, dayIso, totalRuns, outputFilePath);
-        if (!statePath.isEmpty())
+        const QJsonObject updatedState = BuildRunnerState(options, dayIso, totalRuns, outputFilePath);
+        if (!runnerStatePath.isEmpty())
         {
-            SaveJsonToFile(updatedState, statePath);
+            SaveJsonToFile(updatedState, runnerStatePath);
         }
 
         solveDate = solveDate.addDays(1);
