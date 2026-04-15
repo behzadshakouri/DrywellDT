@@ -8,12 +8,27 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
+#include <QUrl>
+#include <QUrlQuery>
 #include <iostream>
+
+// OHQ epoch: day-serial 0 = 1899-12-30 (Excel convention)
+static const QDate kNOAAOHQEpoch(1899, 12, 30);
 
 NOAAWeatherFetcher::NOAAWeatherFetcher(QObject *parent)
     : QObject(parent)
     , manager(new QNetworkAccessManager(this))
 {}
+
+// ---------------------------------------------------------------------------
+// toOHQDaySerial
+// ---------------------------------------------------------------------------
+double NOAAWeatherFetcher::toOHQDaySerial(const QDateTime &dt)
+{
+    const qint64 ms = QDateTime(kNOAAOHQEpoch, QTime(0,0,0), Qt::UTC)
+    .msecsTo(dt.toUTC());
+    return static_cast<double>(ms) / (86400.0 * 1000.0);
+}
 
 // ---------------------------------------------------------------------------
 // parseDurationSecs
@@ -24,10 +39,6 @@ qint64 NOAAWeatherFetcher::parseDurationSecs(const QString &dur)
 {
     qint64 secs = 0;
 
-    // Split into date part and time part at 'T'
-    // e.g. "P7DT14H" → datePart="P7D", timePart="14H"
-    //      "PT1H"    → datePart="P",   timePart="1H"
-    //      "P1D"     → datePart="P1D", timePart=""
     const int tIdx = dur.indexOf('T');
     const QString datePart = (tIdx == -1) ? dur : dur.left(tIdx);
     const QString timePart = (tIdx == -1) ? QString() : dur.mid(tIdx + 1);
@@ -57,7 +68,7 @@ qint64 NOAAWeatherFetcher::parseDurationSecs(const QString &dur)
 }
 
 // ---------------------------------------------------------------------------
-// getWeatherPrediction
+// getWeatherPrediction  (NOAA gridpoints)
 // ---------------------------------------------------------------------------
 QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(
     const QString &office, int gridX, int gridY, datatype type)
@@ -69,7 +80,6 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(
 
     QNetworkRequest request((QUrl(url)));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    // NOAA requires a User-Agent header or it returns 403
     request.setRawHeader("User-Agent", "DTRunner/1.0 (openhydroqual@example.com)");
 
     QString dataTypeKey;
@@ -109,11 +119,9 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(
         const QJsonObject obj = entry.toObject();
         const QString validTime = obj["validTime"].toString();
 
-        // Split "2026-04-13T14:00:00+00:00/PT1H" → datetime + duration
         const QStringList parts = validTime.split('/');
         if (parts.size() != 2) continue;
 
-        // Parse start time — Qt handles the +00:00 offset natively
         const QDateTime start =
             QDateTime::fromString(parts[0], Qt::ISODate).toUTC();
         if (!start.isValid()) continue;
@@ -130,4 +138,106 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(
     std::cout << "[NOAA] Fetched " << result.size()
               << " " << dataTypeKey.toStdString() << " records\n";
     return result;
+}
+
+// ---------------------------------------------------------------------------
+// getOpenMeteoPrecipitation
+// Fetches hourly precipitation from Open-Meteo (free, no API key).
+// Returns CPrecipitation bins in OHQ day-serial units filtered to interval.
+// ---------------------------------------------------------------------------
+CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
+    double latitude, double longitude,
+    const QDateTime &intervalStart,
+    const QDateTime &intervalEnd)
+{
+    CPrecipitation precip;
+    m_lastError.clear();
+
+    // Build URL
+    QUrl url("https://api.open-meteo.com/v1/forecast");
+    QUrlQuery query;
+    query.addQueryItem("latitude",      QString::number(latitude,  'f', 5));
+    query.addQueryItem("longitude",     QString::number(longitude, 'f', 5));
+    query.addQueryItem("hourly",        "precipitation");
+    query.addQueryItem("forecast_days", "7");
+    query.addQueryItem("timezone",      "GMT");
+    url.setQuery(query);
+
+    std::cout << "[OpenMeteo] Fetching: " << url.toString().toStdString() << "\n";
+
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent",
+                         "DTRunner/1.0 (openhydroqual@example.com)");
+
+    QNetworkReply *reply = manager->get(request);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        m_lastError = "[OpenMeteo] Network error: " + reply->errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        reply->deleteLater();
+        return precip;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &parseError);
+    reply->deleteLater();
+
+    if (doc.isNull()) {
+        m_lastError = "[OpenMeteo] JSON parse error: " + parseError.errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        return precip;
+    }
+
+    const QJsonObject root   = doc.object();
+    const QJsonObject hourly = root.value("hourly").toObject();
+    const QJsonArray  times  = hourly.value("time").toArray();
+    const QJsonArray  values = hourly.value("precipitation").toArray();
+
+    if (times.isEmpty() || times.size() != values.size()) {
+        m_lastError = "[OpenMeteo] Unexpected response structure";
+        std::cerr << m_lastError.toStdString() << "\n";
+        return precip;
+    }
+
+    int loaded  = 0;
+    int skipped = 0;
+
+    for (int i = 0; i < times.size(); ++i)
+    {
+        // Open-Meteo returns "2026-04-15T00:00" — always UTC (timezone=GMT)
+        QDateTime binStart = QDateTime::fromString(
+            times[i].toString(), "yyyy-MM-ddTHH:mm");
+        binStart.setTimeSpec(Qt::UTC);
+
+        if (!binStart.isValid())
+            continue;
+
+        const QDateTime binEnd = binStart.addSecs(3600); // 1-hour bins
+
+        // Skip bins entirely outside the interval window
+        if (binEnd <= intervalStart || binStart >= intervalEnd) {
+            ++skipped;
+            continue;
+        }
+
+        // Clamp bin edges to interval window
+        const QDateTime clampedStart = qMax(binStart, intervalStart);
+        const QDateTime clampedEnd   = qMin(binEnd,   intervalEnd);
+
+        const double s  = toOHQDaySerial(clampedStart);
+        const double e  = toOHQDaySerial(clampedEnd);
+        const double mm = values[i].toDouble();
+
+        // Convert mm → metres (OHQ uses SI units)
+        precip.append(s, e, mm / 1000.0);
+        ++loaded;
+    }
+
+    std::cout << "[OpenMeteo] Precipitation bins loaded: " << loaded
+              << " (skipped " << skipped << " outside window)\n";
+
+    return precip;
 }

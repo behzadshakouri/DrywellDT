@@ -123,6 +123,9 @@ bool DTConfig::load(QString &errorMessage)
     noaaOffice    = raw.value("noaa_office").toString("LWX").toStdString();
     noaaGridX     = raw.value("noaa_grid_x").toInt(0);
     noaaGridY     = raw.value("noaa_grid_y").toInt(0);
+    weatherSource = raw.value("weather_source").toString("openmeteo").toStdString();
+    latitude  = raw.value("latitude").toDouble(0.0);
+    longitude = raw.value("longitude").toDouble(0.0);
 
     startDatetime = raw.value("start_datetime").toString().toStdString();
     intervalStr   = raw.value("interval").toString("1day").toStdString();

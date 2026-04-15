@@ -202,6 +202,17 @@ bool DTRunner::runOnce()
     std::cout << "[Runner] Writing output to: " << outputFile.toStdString() << "\n";
     ohqSystem->GetOutputs().write(outputFile.toStdString());
 
+    const QString selectedOutputFile =
+        QString::fromStdString(m_config.outputDir) + "/selected_output.csv";
+
+    if (!m_selectedOutputWritten) {
+        ohqSystem->GetObservedOutputs().write(selectedOutputFile.toStdString());
+        m_selectedOutputWritten = true;
+    } else {
+        ohqSystem->GetObservedOutputs().appendtofile(selectedOutputFile.toStdString());
+    }
+    std::cout << "[Runner] Selected output written to: " << selectedOutputFile.toStdString() << "\n";
+
     // ------------------------------------------------------------------
     // 4.  Export any requested state variables
     // ------------------------------------------------------------------
@@ -361,10 +372,20 @@ CPrecipitation DTRunner::fetchPrecipitation(const QDateTime &intervalStart,
     CPrecipitation precip;
 
     NOAAWeatherFetcher fetcher;
+
+    if (m_config.weatherSource == "openmeteo") {
+        CPrecipitation precip = fetcher.getOpenMeteoPrecipitation(
+            m_config.latitude, m_config.longitude,
+            intervalStart, intervalEnd);
+        if (precip.n == 0)
+            std::cerr << "[Runner] Warning: " << fetcher.lastError().toStdString() << "\n";
+        return precip;
+    }
+
+    // NOAA path
     const QVector<WeatherData> raw = fetcher.getWeatherPrediction(
         QString::fromStdString(m_config.noaaOffice),
-        m_config.noaaGridX,
-        m_config.noaaGridY,
+        m_config.noaaGridX, m_config.noaaGridY,
         datatype::PrecipitationAmount);
 
     if (raw.isEmpty()) {

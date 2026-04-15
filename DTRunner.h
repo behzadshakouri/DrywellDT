@@ -96,4 +96,6 @@ private:
 
     // How many intervals have completed successfully.
     int m_runsCompleted = 0;
+
+    bool m_selectedOutputWritten = false;
 };

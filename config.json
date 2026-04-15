@@ -1,0 +1,22 @@
+{
+    "script_file":         "/home/arash/Projects/DrywellDT/models/simple_pond_catchment.ohq",
+    "load_model_json":     "",
+    "state_dir":           "/home/arash/Projects/DrywellDT/state",
+    "output_dir":          "/home/arash/Projects/DrywellDT/outputs",
+    "model_snapshot_dir":  "/home/arash/Projects/DrywellDT/snapshots",
+    "weather_file":        "",
+    "weather_source": "openmeteo",
+    "latitude":  38.91088,
+    "longitude": -76.98569,
+    "noaa_office": "LWX",
+    "noaa_grid_x": 96,
+    "noaa_grid_y": 70,
+    "interval":            "1day",
+    "start_datetime":      "",
+    "state_variables": [
+        {
+            "variable":    "Pond:storage",
+            "output_path": "/home/arash/Projects/DrywellDT/models/outputs/drywell_storage.json"
+        }
+    ]
+}

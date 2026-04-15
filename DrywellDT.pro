@@ -6,6 +6,9 @@ CONFIG -= app_bundle
 
 CONFIG += c++14
 
+# Set to 1 to compile OHQ from source, 0 to use the shared library
+OHQ_FROM_SOURCE = 1
+
 INCLUDEPATH += ../OpenHydroQual/aquifolium/include
 INCLUDEPATH += ../OpenHydroQual/aquifolium/src
 INCLUDEPATH += ../OpenHydroQual/aquifolium/include/GA
@@ -20,24 +23,67 @@ win32: DEFINES += windows_version
 DEFINES += Terminal_version
 DEFINES += Q_JSON_SUPPORT
 
-
 TARGET = DryWellDT
 TEMPLATE = app
 win32:QMAKE_CXXFLAGS += /MP
 
-# Link against the OHQ shared library
-CONFIG(debug, debug|release) {
-    message(Building in debug mode)
-    DEFINES += NO_OPENMP DEBUG
-    LIBS += -L$$PWD/libs/debug -lOHQLib
-    QMAKE_RPATHDIR += $$PWD/libs/debug
-}
-CONFIG(release, debug|release) {
-    message(Building in release mode)
-    LIBS += -L$$PWD/libs/release -lOHQLib
-    QMAKE_RPATHDIR += $$PWD/libs/release
+# ── OHQ: source vs library ───────────────────────────────────────
+equals(OHQ_FROM_SOURCE, 1) {
+    message(Building with OHQ source files)
+    SOURCES += \
+        ../OpenHydroQual/aquifolium/src/Block.cpp \
+        ../OpenHydroQual/aquifolium/src/Command.cpp \
+        ../OpenHydroQual/aquifolium/src/Condition.cpp \
+        ../OpenHydroQual/aquifolium/src/ErrorHandler.cpp \
+        ../OpenHydroQual/aquifolium/src/Expression.cpp \
+        ../OpenHydroQual/aquifolium/src/Link.cpp \
+        ../OpenHydroQual/aquifolium/src/Matrix.cpp \
+        ../OpenHydroQual/aquifolium/src/Matrix_arma.cpp \
+        ../OpenHydroQual/aquifolium/src/MetaModel.cpp \
+        ../OpenHydroQual/aquifolium/src/NormalDist.cpp \
+        ../OpenHydroQual/aquifolium/src/Object.cpp \
+        ../OpenHydroQual/aquifolium/src/Objective_Function.cpp \
+        ../OpenHydroQual/aquifolium/src/Objective_Function_Set.cpp \
+        ../OpenHydroQual/aquifolium/src/Parameter.cpp \
+        ../OpenHydroQual/aquifolium/src/Parameter_Set.cpp \
+        ../OpenHydroQual/aquifolium/src/Precipitation.cpp \
+        ../OpenHydroQual/aquifolium/src/Quan.cpp \
+        ../OpenHydroQual/aquifolium/src/QuanSet.cpp \
+        ../OpenHydroQual/aquifolium/src/QuickSort.cpp \
+        ../OpenHydroQual/aquifolium/src/Rule.cpp \
+        ../OpenHydroQual/aquifolium/src/RxnParameter.cpp \
+        ../OpenHydroQual/aquifolium/src/Script.cpp \
+        ../OpenHydroQual/aquifolium/src/Source.cpp \
+        ../OpenHydroQual/aquifolium/src/System.cpp \
+        ../OpenHydroQual/aquifolium/src/Utilities.cpp \
+        ../OpenHydroQual/aquifolium/src/Vector.cpp \
+        ../OpenHydroQual/aquifolium/src/Vector_arma.cpp \
+        ../OpenHydroQual/aquifolium/src/constituent.cpp \
+        ../OpenHydroQual/aquifolium/src/observation.cpp \
+        ../OpenHydroQual/aquifolium/src/precalculatedfunction.cpp \
+        ../OpenHydroQual/aquifolium/src/reaction.cpp \
+        ../OpenHydroQual/aquifolium/src/restorepoint.cpp \
+        ../OpenHydroQual/aquifolium/src/solutionlogger.cpp \
+        ../OpenHydroQual/aquifolium/src/GA/Binary.cpp \
+        ../OpenHydroQual/aquifolium/src/GA/Individual.cpp \
+        ../OpenHydroQual/aquifolium/src/GA/DistributionNUnif.cpp \
+        ../OpenHydroQual/aquifolium/src/GA/Distribution.cpp \
+        ../OpenHydroQual/jsoncpp/src/lib_json/json_reader.cpp \
+        ../OpenHydroQual/jsoncpp/src/lib_json/json_value.cpp \
+        ../OpenHydroQual/jsoncpp/src/lib_json/json_writer.cpp
+} else {
+    message(Building with OHQ shared library)
+    CONFIG(debug, debug|release) {
+        LIBS += -L$$PWD/libs/debug -lOHQLib
+        QMAKE_RPATHDIR += $$PWD/libs/debug
+    }
+    CONFIG(release, debug|release) {
+        LIBS += -L$$PWD/libs/release -lOHQLib
+        QMAKE_RPATHDIR += $$PWD/libs/release
+    }
 }
 
+# ── Platform libs ────────────────────────────────────────────────
 linux {
     DEFINES += ARMA_USE_LAPACK ARMA_USE_BLAS GSL
     LIBS += -larmadillo -llapack -lblas -lgsl -lgomp
@@ -49,58 +95,18 @@ macx {
     DEPENDPATH += $$PWD/../../../../opt/homebrew/Cellar/armadillo/11.4.2/include
 }
 
+# ── Debug/Release ────────────────────────────────────────────────
 CONFIG(debug, debug|release) {
     message(Building in debug mode)
-    DEFINES += DEBUG
+    DEFINES += NO_OPENMP DEBUG
 }
 
+# ── Project sources ──────────────────────────────────────────────
 SOURCES += \
     DTConfig.cpp \
     DTRunner.cpp \
     main.cpp \
     noaaweatherfetcher.cpp
-
-SOURCES += \
-        #../../../OpenHydroQual/aquifolium/src/Block.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Command.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Condition.cpp \
-        #../../../OpenHydroQual/aquifolium/src/ErrorHandler.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Expression.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Link.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Matrix.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Matrix_arma.cpp \
-        #../../../OpenHydroQual/aquifolium/src/MetaModel.cpp \
-        #../../../OpenHydroQual/aquifolium/src/NormalDist.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Object.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Objective_Function.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Objective_Function_Set.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Parameter.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Parameter_Set.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Precipitation.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Quan.cpp \
-        #../../../OpenHydroQual/aquifolium/src/QuanSet.cpp \
-        #../../../OpenHydroQual/aquifolium/src/QuickSort.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Rule.cpp \
-        #../../../OpenHydroQual/aquifolium/src/RxnParameter.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Script.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Source.cpp \
-        #../../../OpenHydroQual/aquifolium/src/System.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Utilities.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Vector.cpp \
-        #../../../OpenHydroQual/aquifolium/src/Vector_arma.cpp \
-        #../../../OpenHydroQual/aquifolium/src/constituent.cpp \
-        #../../../OpenHydroQual/aquifolium/src/observation.cpp \
-        #../../../OpenHydroQual/aquifolium/src/precalculatedfunction.cpp \
-        #../../../OpenHydroQual/aquifolium/src/reaction.cpp \
-        #../../../OpenHydroQual/aquifolium/src/restorepoint.cpp \
-        #../../../OpenHydroQual/aquifolium/src/solutionlogger.cpp \
-        #../../../OpenHydroQual/aquifolium/src/GA/Binary.cpp \
-        #../../../OpenHydroQual/aquifolium/src/GA/Individual.cpp \
-        #../../../OpenHydroQual/aquifolium/src/GA/DistributionNUnif.cpp \
-        #../../../OpenHydroQual/aquifolium/src/GA/Distribution.cpp \
-        #../../../jsoncpp/src/lib_json/json_reader.cpp \
-        #../../../jsoncpp/src/lib_json/json_value.cpp \
-        #../../../jsoncpp/src/lib_json/json_writer.cpp \
 
 HEADERS += \
     ../../XString.h \

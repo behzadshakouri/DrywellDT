@@ -36,9 +36,12 @@ public:
     std::string weatherFile;       // optional weather JSON
 
     // --- weather / NOAA ---
+    std::string weatherSource  = "openmeteo"; // "noaa" or "openmeteo"
+    double      latitude       = 0.0;
+    double      longitude      = 0.0;
     std::string noaaOffice;        // e.g. "LWX"
-    int         noaaGridX = 0;     // NOAA grid X coordinate
-    int         noaaGridY = 0;     // NOAA grid Y coordinate
+    int         noaaGridX = 0;
+    int         noaaGridY = 0;
 
     // --- timing ---
     // "300s" | "4hr" | "2day"  — parsed into intervalMs for QTimer

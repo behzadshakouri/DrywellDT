@@ -1,4 +1,5 @@
 loadtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
+addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
 addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/Pond_Plugin.json
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
@@ -46,3 +47,6 @@ create block;type=Pond,Evapotranspiration=,Precipitation=,Storage=0,_height=200,
 create block;type=fixed_head,Storage=100000,_height=200,_width=200,head=0,name=fixed_head (1),x=1071,y=980
 create link;from=Catchment (1),to=Pond,type=Catchment_link,name=Catchment (1) - Pond (1)
 create link;from=Pond,to=fixed_head (1),type=wier,alpha=10000,beta=2.5,crest_elevation=0.2,name=Pond (1) - fixed_head (1)
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=Storage,name=Pond Storage,object=Pond,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,name=Pond Outflow,object=Pond (1) - fixed_head (1),observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,name=Pond Inflow,object=Catchment (1) - Pond (1),observed_data=
