@@ -102,6 +102,7 @@ bool DTRunner::runOnce()
     const QDateTime intervalStart = m_nextIntervalStart;
     const QDateTime intervalEnd   = intervalStart.addMSecs(m_config.intervalMs);
 
+
     const double ohqStart = toOHQDaySerial(intervalStart);
     const double ohqEnd   = toOHQDaySerial(intervalEnd);
 
@@ -156,39 +157,40 @@ bool DTRunner::runOnce()
         QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
     const std::string settingsFile = defaultTemplatePath + "settings.json";
 
-    std::unique_ptr<System> system(new System());
-    system->SetDefaultTemplatePath(defaultTemplatePath);
+    std::unique_ptr<System> ohqSystem(new System());
+    //std::cout << "[Runner] sizeof(System) = " << sizeof(System) << "\n";
+    ohqSystem->SetDefaultTemplatePath(defaultTemplatePath);
 
     const QFileInfo scriptFi(QString::fromStdString(m_config.scriptFile));
-    system->SetWorkingFolder(
+    ohqSystem->SetWorkingFolder(
         QString::fromStdString(m_config.outputDir).toStdString() + "/");
 
     std::cout << "[Runner] Preparing model...\n";
     if (!modelJsonPath.isEmpty())
     {
-        system->ReadSystemSettingsTemplate(settingsFile);
-        system->LoadfromJson(modelJsonPath);
+        ohqSystem->ReadSystemSettingsTemplate(settingsFile);
+        ohqSystem->LoadfromJson(modelJsonPath);
     }
     else
     {
         // First-ever run: build from script, then override the time window
-        Script scr(m_config.scriptFile, system.get());
-        system->CreateFromScript(scr, settingsFile);
+        Script scr(m_config.scriptFile, ohqSystem.get());
+        ohqSystem->CreateFromScript(scr, settingsFile);
 
         // Override the simulation window with what we want
         // (script may have hardcoded dates from calibration)
-        system->SetProp("simulation_start_time",ohqStart);
-        system->SetProp("simulation_end_time",ohqStart);
+        ohqSystem->SetProp("simulation_start_time",ohqStart);
+        ohqSystem->SetProp("simulation_end_time",ohqStart);
 
     }
 
-    system->SetSilent(false);
-    system->CalcAllInitialValues();
+    ohqSystem->SetSilent(false);
+    ohqSystem->CalcAllInitialValues();
     // Fetch and inject precipitation for this interval
     CPrecipitation precip = fetchPrecipitation(intervalStart, intervalEnd);
-    injectPrecipitation(system.get(), precip);
+    injectPrecipitation(ohqSystem.get(), precip);
     std::cout << "[Runner] Solving...\n";
-    system->Solve();
+    ohqSystem->Solve();
 
     // ------------------------------------------------------------------
     // 3.  Write simulation outputs to outputDir
@@ -198,14 +200,14 @@ bool DTRunner::runOnce()
         intervalStart.toString("yyyyMMdd_HHmmss") + "_output.txt";
 
     std::cout << "[Runner] Writing output to: " << outputFile.toStdString() << "\n";
-    system->GetOutputs().write(outputFile.toStdString());
+    ohqSystem->GetOutputs().write(outputFile.toStdString());
 
     // ------------------------------------------------------------------
     // 4.  Export any requested state variables
     // ------------------------------------------------------------------
     for (const auto &exp : m_config.stateVarExports)
     {
-        system->SaveStateVariableToJson(exp.variable, exp.outputPath);
+        ohqSystem->SaveStateVariableToJson(exp.variable, exp.outputPath);
     }
 
     // ------------------------------------------------------------------
@@ -220,8 +222,8 @@ bool DTRunner::runOnce()
         intervalStart.toString("yyyyMMdd_HHmmss") + "_model.json";
 
     // Save the OHQ system state to the model snapshot dir
-    system->SavetoJson(modelSnapshotPath.toStdString(),
-                       system->addedtemplates, false, true);
+    ohqSystem->SavetoJson(modelSnapshotPath.toStdString(),
+                       ohqSystem->addedtemplates, false, true);
 
     // Load it back so we can annotate it with runner metadata
     QJsonObject savedState = readJson(modelSnapshotPath);
@@ -403,8 +405,7 @@ CPrecipitation DTRunner::fetchPrecipitation(const QDateTime &intervalStart,
 // ---------------------------------------------------------------------------
 void DTRunner::injectPrecipitation(System *system, const CPrecipitation &precip)
 {
-    // TODO: wire precip into the OHQ system
-    // e.g. find the relevant block and set its precipitation time series
+    system->source("rain")->Variable("timeseries")->SetTimeSeries(precip);
     (void)system;
     (void)precip;
 }

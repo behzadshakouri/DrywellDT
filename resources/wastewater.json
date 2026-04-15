@@ -1,0 +1,151 @@
+{
+  "Activated_Sludge_Reactor": {
+    "type": "block",
+    "typecategory": "Blocks",
+    "description": "Reactor",
+    "icon": {
+      "filename": "activate_sludge_reactor.png"
+    },
+    "Storage": {
+      "type": "balance",
+      "massbalance": "true",
+      "flow": "flow",
+      "includeinoutput": "true",
+      "description": "Initial Storage;Storage",
+      "ask_user": "true",
+      "delegate": "UnitBox",
+      "unit": "m^3;ft^3",
+      "estimate": "true",
+      "helptext": "Initial Storage;Storage"
+    },
+    "helptext": "Reactor"
+  },
+  "Settling compartment": {
+    "type": "block",
+    "typecategory": "Blocks",
+    "description": "Settling compartment",
+    "icon": {
+      "filename": "sedimentation_tank_element.png"
+    },
+    "Storage": {
+      "type": "balance",
+      "massbalance": "true",
+      "flow": "flow",
+      "inflow": "inflow",
+      "includeinoutput": "true",
+      "description": "Initial Storage;Storage",
+      "ask_user": "true",
+      "delegate": "UnitBox",
+      "unit": "m^3;ft^3",
+      "estimate": "true",
+      "helptext": "Initial Storage;Storage"
+    },
+    "bottom_elevation": {
+      "type": "value",
+      "ask_user": "true",
+      "description": "Bottom elevation",
+      "delegate": "UnitBox",
+      "unit": "m;ft",
+      "helptext": "Bottom elevation"
+    },
+    "inflow": {
+      "type": "timeseries",
+      "includeinoutput": "true",
+      "applylimit": "true",
+      "description": "Inflow time series",
+      "ask_user": "true",
+      "delegate": "Browser",
+      "helptext": "Inflow time series"
+    },
+    "helptext": "Settling compartment"
+  },
+  "Fixed flow": {
+    "type": "link",
+    "typecategory": "Connectors",
+    "description": "Fixed flow",
+    "icon": {
+      "filename": "fixed_flow.png"
+    },
+    "flow": {
+      "type": "value",
+      "description": "Flow rate",
+      "includeinoutput": "true",
+      "applylimit": "true",
+      "ask_user": "true",
+      "delegate": "UnitBox",
+      "unit": "m^3/day;ft^3/day;m^3/s;ft^3/s",
+      "helptext": "Flow rate"
+    },
+    "length": {
+      "type": "expression",
+      "expression": "1",
+      "includeinoutput": "false",
+      "description": "1",
+      "ask_user": "false"
+    },
+    "area": {
+      "type": "expression",
+      "expression": "0.000000001",
+      "includeinoutput": "false",
+      "description": "1",
+      "ask_user": "false"
+    },
+    "color": {
+      "type": "string",
+      "default": "0,0,200"
+    },
+    "helptext": "Fixed flow"
+  },
+  "Sedimentation tank element interface": {
+    "type": "link",
+    "typecategory": "Connectors",
+    "description": "Settling element interface",
+    "icon": {
+      "filename": "sedimentation_tank_element.png"
+    },
+    "time_variable_flow": {
+      "type": "timeseries",
+      "includeinoutput": "true",
+      "description": "Time variable flow",
+      "ask_user": "true",
+      "delegate": "Browser",
+      "helptext": "Time variable flow"
+    },
+    "constant_flow": {
+      "type": "value",
+      "includeinoutput": "true",
+      "description": "Constant flow",
+      "ask_user": "true",
+      "delegate": "UnitBox",
+      "unit": "m^3/day;ft^3/day;m^3/s;ft^3/s",
+      "helptext": "Constant flow"
+    },
+    "flow": {
+      "type": "expression",
+      "expression": "time_variable_flow+constant_flow",
+      "includeinoutput": "true",
+      "description": "Flow rate",
+      "ask_user": "false"
+    },
+    "length": {
+      "type": "expression",
+      "expression": "1",
+      "includeinoutput": "false",
+      "description": "1",
+      "ask_user": "false"
+    },
+    "area": {
+      "type": "value",
+      "ask_user": "true",
+      "description": "Interface area",
+      "delegate": "UnitBox",
+      "unit": "m^2;ft^2",
+      "helptext": "Interface area"
+    },
+    "color": {
+      "type": "string",
+      "default": "0,0,200"
+    },
+    "helptext": "Settling element interface"
+  }
+}

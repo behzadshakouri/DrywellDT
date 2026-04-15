@@ -1,0 +1,236 @@
+{
+  "Plant": {
+    "type": "block",
+    "typecategory": "Blocks",
+    "description": "Plant", 
+    "icon": {
+      "filename": "plant.png"
+    },
+    "Storage": {
+      "type": "balance",
+      "massbalance": "true",
+      "flow": "flow",
+      "inflow": "transpiration",
+      "initial_value_expression": "Biomass/1000000",
+      "includeinoutput": "true",
+      "description": "Water Storage",
+      "ask_user": "false"
+    },
+    "Biomass": {
+      "type": "value",
+      "includeinoutput": "true",
+      "description": "Initial Biomass; Biomass",
+      "unit": "kg;g",
+      "includeinoutput": "true",
+      "delegate": "UnitBox",
+      "ask_user": "true"
+    },
+    "Leaf_area_index": {
+      "type": "value",
+      "includeinoutput": "true",
+      "description": "Leaf area index",
+      "delegate": "ValueBox",
+      "ask_user": "true"
+    },
+    "solar_radiation":{
+    	"type": "timeseries",
+	"includeinoutput": "true",
+	"description": "Solar Radiation (W/m^2)",
+    	"ask_user": "true",
+	"delegate": "Browser"
+    },
+    "Temperature":{
+    	"type": "timeseries",
+	"includeinoutput": "true",
+	"description": "Temperature time series",
+    	"ask_user": "true",
+	"delegate": "Browser"
+    },
+    "wind_speed":{
+    	"type": "timeseries",
+	"includeinoutput": "true",
+	"description": "Wind time series",
+    	"ask_user": "true",
+	"delegate": "Browser"
+    },
+    "wind_scale_fact" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Wind scale factor",
+    	"default": "1",
+    	"delegate": "ValueBox",
+		"estimate": "true"
+    },
+    "solar_scale_fact" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Solar radiation scale factor",
+    	"default": "1",
+    	"delegate": "ValueBox",
+	"estimate": "true"
+    },
+    "R_h" : {
+    	"type": "timeseries",
+    	"includeinoutput": "true",
+	"description": "Relative humidity time series",
+    	"ask_user": "true",
+	"delegate": "Browser"
+    },
+    "z2" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Wind measurement elevation",
+    	"default": "2",
+    	"criteria": "z2>0",
+        "warningmessage": "Wind reference height must be greater than zero",
+    	"delegate": "UnitBox",
+    	"unit": "m;ft;cm;in"
+    },
+    "z0" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Roughness height",
+    	"default": "0.0003",
+    	"criteria": "z0>0",
+       "warningmessage": "Roughness height must be greater than zero",
+    	"delegate": "UnitBox",
+    	"unit": "m;ft;cm;in"
+    },
+    "gamma" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "psychrometric constant (Pa/C)",
+    	"default": "66.8",
+    	"criteria": "gamma>0",
+       "warningmessage": "psychrometric constant must be greater than zero",
+    	"delegate": "ValueBox"
+    },
+    "area" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Planted area",
+    	"default": "1",
+    	"criteria": "area>0",
+       "warningmessage": "planted area must be greater than zero",
+    	"delegate": "UnitBox",
+    	"unit": "m~^2; ft~^2"
+    },
+    "B": {
+    	"type": "expression",
+	"includeinoutput": "true",
+	"description": "B coefficient",
+	"ask_user": "false",
+	"expression": "0.000102*wind_speed*wind_scale_fact/(_log(z2/z0))^2"
+    },
+    "e_as": {
+    	"type": "expression",
+    	"expression": "611*_exp(17.27*Temperature/(237.3+Temperature))",
+	"includeinoutput": "true",
+	"description": "Saturated humidity"
+    },
+    "Ea": {
+      "type": "expression",
+      "includeinoutput": "true",
+      "description": "Aerodynamic Evapotranspiration rate",
+      "ask_user": "false",
+      "expression": "B*e_as*(R_h-1)"
+    },
+    "l_v" :
+    {
+	"type": "expression",
+	"description": "Latent Heat of Evaporation (J/kg)",
+      	"expression": "2501000-2370*Temperature",
+	"ask_user": "false"
+    },
+    "Er": {
+      "type": "expression",
+      "includeinoutput": "true",
+      "description": "Radiation-based Evapotranspiration rate",
+      "ask_user": "false",
+      "expression": "-solar_scale_fact*solar_radiation/(l_v*1000)*86400"
+    },
+    "Delta": {
+      "type": "expression",
+      "includeinoutput": "true",
+      "description": "Gradient of e_as vs T",
+      "ask_user": "false",
+      "expression": "4098*e_as/(237.3+Temperature)"
+    },
+    "transpiration": {
+      "type": "expression",
+      "includeinoutput": "true",
+      "description": "Transpiration rate",
+      "ask_user": "false",
+      "expression": "((Delta*Er/(Delta+gamma))+(gamma*Ea/(Delta+gamma)))*Storage*1000000/Biomass*Leaf_area_index*area"
+    },
+    "pressure_head": {
+      "type": "expression",
+      "includeinoutput": "true",
+      "description": "Pressure Head (m)",
+      "ask_user": "false",
+      "expression": "-plant_alpha*(1-Storage*1000000/Biomass)^plant_beta"
+    },
+    "plant_alpha" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Coefficient for calculating plant matric suction",
+    	"default": "1000",
+    	"delegate": "ValueBox",
+	"estimate": "true"
+    },
+    "plant_beta" : {
+    	"type": "value",
+    	"ask_user": "true",
+	"includeinoutput": "false",
+    	"description": "Exponent for calculating plant matric suction",
+    	"default": "2",
+    	"delegate": "ValueBox",
+	"estimate": "true"
+    }
+  },
+  "Soil_to_plant_link":
+  {
+    "type": "link",
+    "typecategory": "Connectors",
+    "icon": {
+      "filename": "Soil2Plant.png"
+    },
+    "description": "Soil to Plant Connector",
+    "Transmissivity_Coefficient": {
+      "type": "value",
+      "description": "Transmissivity coefficient",
+      "delegate": "UnitBox",
+      "default": "1",
+      "unit": "1/day",
+      "ask_user": "true"
+    },
+    "length": {
+      "type": "value",
+      "description": "lenght",
+      "default": "1",
+      "unit": "m",
+      "includeinoutput": "false",
+      "ask_user": "false"
+    },
+    "flow": {
+      "type": "expression",
+      "description": "Flow",
+      "expression": "Transmissivity_Coefficient*(pressure_head.s-pressure_head.e)*(area.e+area.s)/2",
+      "includeinoutput": "true",
+      "applylimit": "true",
+      "ask_user": "false"
+    },
+    "color": {
+      "type": "string",
+      "default": "120,120,0"
+    }
+  }
+}
+

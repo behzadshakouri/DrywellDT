@@ -10,3 +10,23 @@ TOpenHydroQual/build/Desktop_Qt_6_8_3-Debug/.qtc_clangd/.cache/clangd/index/
 TOpenHydroQual/build/Desktop_Qt_6_8_3-Debug/.qtc_clangd/
 
 *.user
+
+build/Desktop_Qt_6_8_2-Release/.qtc_clangd/.cache/clangd/index/
+
+build/Desktop_Qt_6_8_2-Release/.qtc_clangd/
+
+build/Desktop_Qt_6_8_2-Release/
+
+snapshots/
+
+resources/Icons/
+
+resources/Wizard_Scripts_server/Diagrams/
+
+resources/Wizard_Scripts_server/
+
+resources/Wizard_Scripts/Wizard_Icons/
+
+resources/Wizard_Scripts/
+
+outputs/

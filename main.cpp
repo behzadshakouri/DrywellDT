@@ -14,6 +14,7 @@
 #include <QCoreApplication>
 #include <QTimer>
 #include <iostream>
+#include "System.h"
 
 int main(int argc, char *argv[])
 {
@@ -42,6 +43,8 @@ int main(int argc, char *argv[])
                   << initError.toStdString() << "\n";
         return 2;
     }
+
+    runner.runOnce();
 
     // ------------------------------------------------------------------
     // 3. Run the first interval immediately (at start-up)
