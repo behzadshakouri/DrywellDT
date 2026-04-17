@@ -1,19 +1,40 @@
 #include "MainWindow.h"
 
+#include <QBrush>
+#include <QColor>
 #include <QCursor>
 #include <QDateTime>
+#include <QFont>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPainter>
+#include <QPen>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
+#include <QStringList>
 #include <QToolTip>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <limits>
+
+// ------------------------------------------------------------------
+// Per-series line colors. Cycles for series 6..N.
+// ------------------------------------------------------------------
+static const QStringList kSeriesColors = {
+    "#2D7FF9", "#10B981", "#F59E0B",
+    "#EF4444", "#8B5CF6", "#EC4899",
+};
+
+// Status-label helpers: colored dot + message.
+static QString statusHtml(const QString &color, const QString &text)
+{
+    return QString("<span style='color:%1; font-size:14px;'>&#9679;</span>"
+                   " <span>%2</span>").arg(color, text.toHtmlEscaped());
+}
 
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
@@ -36,45 +57,69 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     auto *central = new QWidget(this);
     auto *root    = new QVBoxLayout(central);
+    root->setContentsMargins(20, 18, 20, 18);
+    root->setSpacing(14);
 
-    // ---- top bar: URL | refresh (s) | Refresh button ----
-    auto *topBar = new QHBoxLayout();
+    // ---- page header ----
+    auto *title = new QLabel("DrywellDT Viewer");
+    title->setObjectName("HeaderTitle");
+    auto *subtitle = new QLabel("Observed outputs — live from the OpenHydroQual digital twin");
+    subtitle->setObjectName("HeaderSubtitle");
+    root->addWidget(title);
+    root->addWidget(subtitle);
 
-    topBar->addWidget(new QLabel("CSV URL:"));
+    // ---- top bar card: URL | refresh (s) | Last N | Refresh button ----
+    auto *topBarCard = new QFrame();
+    topBarCard->setObjectName("TopBarCard");
+    auto *topBar = new QHBoxLayout(topBarCard);
+    topBar->setContentsMargins(14, 12, 14, 12);
+    topBar->setSpacing(10);
+
+    topBar->addWidget(new QLabel("CSV URL"));
     m_urlEdit = new QLineEdit(m_url.toString());
+    m_urlEdit->setClearButtonEnabled(true);
     topBar->addWidget(m_urlEdit, 1);
 
-    topBar->addWidget(new QLabel("Refresh (s):"));
+    topBar->addSpacing(4);
+    topBar->addWidget(new QLabel("Refresh (s)"));
     m_intervalSpin = new QSpinBox();
     m_intervalSpin->setRange(5, 24 * 3600);
     m_intervalSpin->setValue(m_refreshSeconds);
+    m_intervalSpin->setFixedWidth(90);
     topBar->addWidget(m_intervalSpin);
 
-    topBar->addWidget(new QLabel("Last N (0=all):"));
+    topBar->addSpacing(4);
+    topBar->addWidget(new QLabel("Last N (0=all)"));
     m_lastNSpin = new QSpinBox();
     m_lastNSpin->setRange(0, 10'000'000);
     m_lastNSpin->setValue(m_lastN);
+    m_lastNSpin->setFixedWidth(100);
     topBar->addWidget(m_lastNSpin);
 
     m_refreshBtn = new QPushButton("Refresh");
     topBar->addWidget(m_refreshBtn);
 
-    root->addLayout(topBar);
+    root->addWidget(topBarCard);
 
-    m_statusLabel = new QLabel("Idle");
+    m_statusLabel = new QLabel();
+    m_statusLabel->setObjectName("StatusLabel");
+    m_statusLabel->setTextFormat(Qt::RichText);
+    m_statusLabel->setText(statusHtml("#9CA3AF", "Idle"));
     root->addWidget(m_statusLabel);
 
     // ---- scrollable column of per-series charts ----
     auto *scroll     = new QScrollArea();
     scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
     auto *chartsHost = new QWidget();
     m_chartsLayout   = new QVBoxLayout(chartsHost);
     m_chartsLayout->setContentsMargins(0, 0, 0, 0);
+    m_chartsLayout->setSpacing(14);
     scroll->setWidget(chartsHost);
     root->addWidget(scroll, 1);
 
     setCentralWidget(central);
-    resize(1100, 800);
+    resize(1180, 820);
 
     // ---- signals ----
     connect(m_refreshBtn,   &QPushButton::clicked,
@@ -97,7 +142,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
 void MainWindow::onRefreshClicked()
 {
-    m_statusLabel->setText(QString("Fetching %1 ...").arg(m_url.toString()));
+    m_statusLabel->setText(statusHtml("#F59E0B",
+        QString("Fetching %1 …").arg(m_url.toString())));
     m_loader.fetch(m_url);
 }
 
@@ -123,16 +169,16 @@ void MainWindow::onUrlChanged()
 
 void MainWindow::onFailed(const QString &err)
 {
-    m_statusLabel->setText("Error: " + err);
+    m_statusLabel->setText(statusHtml("#EF4444", "Error: " + err));
 }
 
 void MainWindow::onLoaded(const QVector<CsvSeries> &series)
 {
     m_lastData = series;
-    m_statusLabel->setText(QString("Loaded %1 series at %2")
-                               .arg(series.size())
-                               .arg(QDateTime::currentDateTime()
-                                        .toString(Qt::ISODate)));
+    m_statusLabel->setText(statusHtml("#10B981",
+        QString("Loaded %1 series at %2")
+            .arg(series.size())
+            .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"))));
     display();
 }
 
@@ -192,18 +238,43 @@ void MainWindow::rebuildPanels(const QVector<CsvSeries> &series)
     }
     m_panels.clear();
 
-    for (const auto &s : series) {
+    const QColor gridColor("#EDF0F4");
+    const QColor labelColor("#6B7684");
+    const QColor titleColor("#1E2A38");
+    const QFont  titleFont("Inter", 11, QFont::DemiBold);
+    const QFont  labelFont("Inter", 10);
+
+    for (int i = 0; i < series.size(); ++i) {
+        const auto &s = series[i];
+
         ChartPanel panel;
-        panel.name   = s.name;
-        panel.chart  = new QChart();
+        panel.name  = s.name;
+        panel.chart = new QChart();
         panel.chart->setTitle(s.name);
+        panel.chart->setTitleFont(QFont("Inter", 12, QFont::DemiBold));
+        panel.chart->setTitleBrush(QBrush(titleColor));
         panel.chart->legend()->setVisible(true);
         panel.chart->legend()->setAlignment(Qt::AlignBottom);
-        panel.chart->setMargins(QMargins(4, 4, 4, 4));
+        panel.chart->legend()->setFont(labelFont);
+        panel.chart->legend()->setLabelColor(labelColor);
+        panel.chart->setAnimationOptions(QChart::SeriesAnimations);
+        panel.chart->setAnimationDuration(250);
+        panel.chart->setMargins(QMargins(14, 10, 14, 10));
+        panel.chart->setBackgroundBrush(QBrush(QColor("#FFFFFF")));
+        panel.chart->setBackgroundPen(QPen(QColor("#E1E5EB")));
+        panel.chart->setBackgroundRoundness(12);
+        panel.chart->setPlotAreaBackgroundVisible(false);
 
         panel.series = new QLineSeries();
         panel.series->setName(s.name);
         panel.series->setPointsVisible(true);
+
+        QPen pen(QColor(kSeriesColors[i % kSeriesColors.size()]));
+        pen.setWidthF(2.2);
+        pen.setCapStyle(Qt::RoundCap);
+        pen.setJoinStyle(Qt::RoundJoin);
+        panel.series->setPen(pen);
+
         panel.series->replace(s.points);
         panel.chart->addSeries(panel.series);
 
@@ -213,11 +284,23 @@ void MainWindow::rebuildPanels(const QVector<CsvSeries> &series)
         panel.axisX = new QDateTimeAxis();
         panel.axisX->setFormat("yyyy-MM-dd HH:mm");
         panel.axisX->setTitleText("Time (UTC)");
+        panel.axisX->setTitleFont(titleFont);
+        panel.axisX->setLabelsFont(labelFont);
+        panel.axisX->setTitleBrush(QBrush(labelColor));
+        panel.axisX->setLabelsColor(labelColor);
+        panel.axisX->setGridLineColor(gridColor);
+        panel.axisX->setLinePenColor(gridColor);
         panel.chart->addAxis(panel.axisX, Qt::AlignBottom);
         panel.series->attachAxis(panel.axisX);
 
         panel.axisY = new QValueAxis();
         panel.axisY->setTitleText(s.name);
+        panel.axisY->setTitleFont(titleFont);
+        panel.axisY->setLabelsFont(labelFont);
+        panel.axisY->setTitleBrush(QBrush(labelColor));
+        panel.axisY->setLabelsColor(labelColor);
+        panel.axisY->setGridLineColor(gridColor);
+        panel.axisY->setLinePenColor(gridColor);
         panel.chart->addAxis(panel.axisY, Qt::AlignLeft);
         panel.series->attachAxis(panel.axisY);
 
@@ -229,7 +312,9 @@ void MainWindow::rebuildPanels(const QVector<CsvSeries> &series)
 
         panel.view = new QChartView(panel.chart);
         panel.view->setRenderHint(QPainter::Antialiasing);
-        panel.view->setMinimumHeight(260);
+        panel.view->setFrameShape(QFrame::NoFrame);
+        panel.view->setStyleSheet("background: transparent;");
+        panel.view->setMinimumHeight(280);
 
         m_chartsLayout->addWidget(panel.view);
         m_panels.push_back(panel);
