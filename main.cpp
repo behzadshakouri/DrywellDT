@@ -44,8 +44,6 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    runner.runOnce();
-
     // ------------------------------------------------------------------
     // 3. Run the first interval immediately (at start-up)
     // ------------------------------------------------------------------

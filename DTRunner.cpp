@@ -180,7 +180,7 @@ bool DTRunner::runOnce()
         // Override the simulation window with what we want
         // (script may have hardcoded dates from calibration)
         ohqSystem->SetProp("simulation_start_time",ohqStart);
-        ohqSystem->SetProp("simulation_end_time",ohqStart);
+        ohqSystem->SetProp("simulation_end_time",ohqEnd);
 
     }
 
@@ -188,6 +188,12 @@ bool DTRunner::runOnce()
     ohqSystem->CalcAllInitialValues();
     // Fetch and inject precipitation for this interval
     CPrecipitation precip = fetchPrecipitation(intervalStart, intervalEnd);
+    const QString precipOutputFile =
+        QString::fromStdString(m_config.outputDir) + "/" +
+        intervalStart.toString("yyyyMMdd_HHmmss") + "_precipitation.txt";
+
+    precip.writefile(precipOutputFile.toStdString());
+
     injectPrecipitation(ohqSystem.get(), precip);
     std::cout << "[Runner] Solving...\n";
     ohqSystem->Solve();
