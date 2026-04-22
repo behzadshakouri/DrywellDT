@@ -54,3 +54,13 @@ viewer/build/WebAssembly_Qt_6_8_2_single_threaded-Debug/.qtc_clangd/
 viewer/build/WebAssembly_Qt_6_8_2_single_threaded-Debug/
 
 viewer/build/WebAssembly_Qt_6_8_2_single_threaded-Release/
+
+build-DrywellDTViewer-Desktop_Qt_6_9_0-Debug/
+
+build/debug/
+
+build/release/
+
+libs/debug/
+
+libs/release/
