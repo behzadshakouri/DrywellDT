@@ -11,7 +11,8 @@ SOURCES += \
 
 HEADERS += \
     MainWindow.h \
-    CsvLoader.h
+    CsvLoader.h \
+    OhqTime.h
 
 # Qt 6 wasm: QApplication + widgets are fully supported.
 # Build with:

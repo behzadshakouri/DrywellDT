@@ -1,21 +1,11 @@
 #include "CsvLoader.h"
-
+#include "OhqTime.h"
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QDateTime>
 #include <QRegularExpression>
 #include <QUrlQuery>
 #include <QStringList>
-
-// OHQ / Excel epoch: day-serial 0 = 1899-12-30 UTC
-static const QDateTime kOHQEpoch = QDateTime(QDate(1899, 12, 30),
-                                             QTime(0, 0, 0), Qt::UTC);
-
-static qint64 ohqSerialToMsEpoch(double serial)
-{
-    const qint64 offsetMs = static_cast<qint64>(serial * 86400.0 * 1000.0);
-    return kOHQEpoch.addMSecs(offsetMs).toMSecsSinceEpoch();
-}
 
 CsvLoader::CsvLoader(QObject *parent) : QObject(parent) {}
 

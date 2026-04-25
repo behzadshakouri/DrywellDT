@@ -26,7 +26,8 @@ DTRunner::DTRunner(const DTConfig &config, QObject *parent)
     , m_config(config)
 {
     // Pre-compute interval length in OHQ day units
-    m_intervalDays = static_cast<double>(config.intervalMs) / (86400.0 * 1000.0);
+    m_intervalDays  = static_cast<double>(config.intervalMs) / (86400.0 * 1000.0);
+    m_forecastDays  = static_cast<double>(config.forecastHorizonMs) / (86400.0 * 1000.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,33 +97,24 @@ bool DTRunner::init(QString &errorMessage)
 }
 
 // ---------------------------------------------------------------------------
-// runOnce  (the main per-interval entry point)
+// runOnce  (orchestrator: Advance, then optional Forecast)
 // ---------------------------------------------------------------------------
 bool DTRunner::runOnce()
 {
-    const QDateTime intervalStart = m_nextIntervalStart;
-    const QDateTime intervalEnd   = intervalStart.addMSecs(m_config.intervalMs);
+    const QDateTime advanceStart = m_nextIntervalStart;
+    const QDateTime advanceEnd   = advanceStart.addMSecs(m_config.intervalMs);
 
-
-    const double ohqStart = toOHQDaySerial(intervalStart);
-    const double ohqEnd   = toOHQDaySerial(intervalEnd);
-
-    std::cout << "\n[Runner] ---- Interval " << (m_runsCompleted + 1) << " ----\n"
-              << "[Runner] Wall clock : "
-              << intervalStart.toString(Qt::ISODate).toStdString()
-              << "  →  "
-              << intervalEnd.toString(Qt::ISODate).toStdString() << "\n"
-              << "[Runner] OHQ serial : " << ohqStart << "  →  " << ohqEnd << "\n";
+    std::cout << "\n[Runner] ======== Cycle " << (m_runsCompleted + 1) << " ========\n";
 
     // ------------------------------------------------------------------
-    // 1.  Locate or build the model state JSON to feed this interval
+    // Build / locate the initial-condition JSON used by BOTH stages.
+    // (Stages run independently from the same starting state.)
     // ------------------------------------------------------------------
     const QString latestSnapshot = findLatestStateSnapshot();
-    QString modelJsonPath;
+    QString initialModelJsonPath;
 
     if (!latestSnapshot.isEmpty())
     {
-        // Hot-restart: patch the window in the previous snapshot
         QJsonObject prevState = readJson(latestSnapshot);
         if (prevState.isEmpty())
         {
@@ -131,167 +123,408 @@ bool DTRunner::runOnce()
             return false;
         }
 
-        const QJsonObject patched = patchSimulationWindow(prevState, ohqStart, ohqEnd);
-
-        // Write patched state to a temp file that OHQ will load
-        const QString patchedPath =
+        // We will re-patch the simulation window inside runStage() per stage,
+        // but writing the prev state once gives both stages a stable base file.
+        initialModelJsonPath =
             QString::fromStdString(m_config.stateDir) + "/_current_input.json";
-        if (!writeJson(patched, patchedPath))
+        if (!writeJson(prevState, initialModelJsonPath))
         {
-            std::cerr << "[Runner] Failed to write patched state\n";
+            std::cerr << "[Runner] Failed to write base initial-condition state\n";
             return false;
         }
-        modelJsonPath = patchedPath;
-        std::cout << "[Runner] Hot-restart from: " << latestSnapshot.toStdString() << "\n";
+        std::cout << "[Runner] Initial condition: " << latestSnapshot.toStdString() << "\n";
     }
     else
     {
-        std::cout << "[Runner] Cold start from script: "
+        std::cout << "[Runner] Initial condition: cold start from script "
                   << m_config.scriptFile << "\n";
-        // modelJsonPath stays empty → BuildAndSolve uses the script
+        // initialModelJsonPath stays empty → runStage() cold-starts from script
     }
 
     // ------------------------------------------------------------------
-    // 2.  Build and solve
+    // Stage A — Advance [t, t+Δ]
+    // ------------------------------------------------------------------
+    const StageResult advance = runStage(StageKind::Advance,
+                                         advanceStart, advanceEnd,
+                                         initialModelJsonPath);
+    if (!advance.ok)
+    {
+        std::cerr << "[Runner] Advance stage failed.\n";
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Stage B — Forecast [t, t+Δ+H]   (optional)
+    // ------------------------------------------------------------------
+    StageResult forecast;
+    forecast.ok = false;
+
+    if (m_forecastDays > 0.0)
+    {
+        const QDateTime forecastEnd =
+            advanceStart.addMSecs(m_config.intervalMs + m_config.forecastHorizonMs);
+
+        forecast = runStage(StageKind::Forecast,
+                            advanceStart, forecastEnd,
+                            initialModelJsonPath);
+        if (!forecast.ok)
+        {
+            std::cerr << "[Runner] Forecast stage failed (continuing).\n";
+            // Non-fatal: Advance already updated state for next cycle.
+        }
+    }
+    else
+    {
+        std::cout << "[Runner] Forecast stage disabled (forecast_horizon = 0).\n";
+    }
+
+    // ------------------------------------------------------------------
+    // Merge Advance + Forecast observed outputs into selected_output.csv
+    //   - actuals: Advance series  [t, t+Δ]
+    //   - forecast tail: Forecast series with t > t+Δ
+    //   - knockout at (t - ε) drops the previous cycle's forecast tail
+    // If Forecast is disabled or failed, only the Advance rows are merged
+    // (and the file behaves as a pure actuals stream).
+    // ------------------------------------------------------------------
+    {
+        const double cutoffSerial = toOHQDaySerial(advanceStart);
+        TimeSeriesSet<double> emptyForecast;
+        const TimeSeriesSet<double> &forecastObs =
+            forecast.ok ? forecast.observed : emptyForecast;
+
+        if (!mergeIntoSelectedOutput(advance.observed, forecastObs, cutoffSerial))
+            std::cerr << "[Runner] selected_output.csv merge failed (continuing).\n";
+    }
+
+    // ------------------------------------------------------------------
+    // Advance timing for next cycle
+    // ------------------------------------------------------------------
+    ++m_runsCompleted;
+    m_nextIntervalStart = advanceEnd;
+
+    std::cout << "[Runner] Cycle complete. Next cycle start: "
+              << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// runStage
+// Performs a single solve over [stageStart, stageEnd] starting from
+// `modelJsonPath` (empty → cold start from script).
+//
+// Stage-dependent side effects:
+//   Advance  : saves *_output.txt, viz_state.json, viz.svg, model snapshot,
+//              state snapshot in stateDir, and (for now) appends the observed
+//              outputs to selected_output.csv.
+//   Forecast : writes only *_forecast_output.txt and forecast_viz.svg.
+// ---------------------------------------------------------------------------
+StageResult DTRunner::runStage(StageKind kind,
+                               const QDateTime &stageStart,
+                               const QDateTime &stageEnd,
+                               const QString &modelJsonPath)
+{
+    StageResult result;
+    result.kind = kind;
+
+    const bool isAdvance = (kind == StageKind::Advance);
+    const char *stageLabel = isAdvance ? "Advance" : "Forecast";
+
+    const double ohqStart = toOHQDaySerial(stageStart);
+    const double ohqEnd   = toOHQDaySerial(stageEnd);
+
+    std::cout << "\n[Runner] ---- Stage " << stageLabel << " ----\n"
+              << "[Runner] Wall clock : "
+              << stageStart.toString(Qt::ISODate).toStdString() << "  →  "
+              << stageEnd.toString(Qt::ISODate).toStdString() << "\n"
+              << "[Runner] OHQ serial : " << ohqStart << "  →  " << ohqEnd << "\n";
+
+    // ------------------------------------------------------------------
+    // Patch the simulation window in the initial-condition file (if any).
+    // Each stage writes its own patched copy so the two solves don't
+    // race over the same _current_input.json.
+    // ------------------------------------------------------------------
+    QString patchedPath;
+    if (!modelJsonPath.isEmpty())
+    {
+        const QJsonObject base    = readJson(modelJsonPath);
+        const QJsonObject patched = patchSimulationWindow(base, ohqStart, ohqEnd);
+
+        const QString suffix = isAdvance ? "_advance.json" : "_forecast.json";
+        patchedPath = QString::fromStdString(m_config.stateDir) +
+                      "/_current_input" + suffix;
+        if (!writeJson(patched, patchedPath))
+        {
+            std::cerr << "[Runner] Failed to write patched state for "
+                      << stageLabel << "\n";
+            return result;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Build and solve
     // ------------------------------------------------------------------
     const std::string defaultTemplatePath =
         QCoreApplication::applicationDirPath().toStdString() + "/../../resources/";
     const std::string settingsFile = defaultTemplatePath + "settings.json";
 
     std::unique_ptr<System> ohqSystem(new System());
-    //std::cout << "[Runner] sizeof(System) = " << sizeof(System) << "\n";
     ohqSystem->SetDefaultTemplatePath(defaultTemplatePath);
-
-    const QFileInfo scriptFi(QString::fromStdString(m_config.scriptFile));
     ohqSystem->SetWorkingFolder(
         QString::fromStdString(m_config.outputDir).toStdString() + "/");
 
     std::cout << "[Runner] Preparing model...\n";
-    if (!modelJsonPath.isEmpty())
+    if (!patchedPath.isEmpty())
     {
         ohqSystem->ReadSystemSettingsTemplate(settingsFile);
-        ohqSystem->LoadfromJson(modelJsonPath);
+        ohqSystem->LoadfromJson(patchedPath);
     }
     else
     {
-        // First-ever run: build from script, then override the time window
+        // Cold start
         Script scr(m_config.scriptFile, ohqSystem.get());
         ohqSystem->CreateFromScript(scr, settingsFile);
-
-        // Override the simulation window with what we want
-        // (script may have hardcoded dates from calibration)
-        ohqSystem->SetProp("simulation_start_time",ohqStart);
-        ohqSystem->SetProp("simulation_end_time",ohqEnd);
-
+        ohqSystem->SetProp("simulation_start_time", ohqStart);
+        ohqSystem->SetProp("simulation_end_time",   ohqEnd);
     }
 
     ohqSystem->SetSilent(false);
     ohqSystem->CalcAllInitialValues();
-    // Fetch and inject precipitation for this interval
-    CPrecipitation precip = fetchPrecipitation(intervalStart, intervalEnd);
-    const QString precipOutputFile =
-        QString::fromStdString(m_config.outputDir) + "/" +
-        intervalStart.toString("yyyyMMdd_HHmmss") + "_precipitation.txt";
 
-    precip.writefile(precipOutputFile.toStdString());
-
+    // Precipitation (clamped to this stage's window inside fetchPrecipitation)
+    CPrecipitation precip = fetchPrecipitation(stageStart, stageEnd);
+    {
+        const QString precipFile =
+            QString::fromStdString(m_config.outputDir) + "/" +
+            stageStart.toString("yyyyMMdd_HHmmss") + "_" +
+            (isAdvance ? "advance" : "forecast") + "_precipitation.txt";
+        precip.writefile(precipFile.toStdString());
+    }
     injectPrecipitation(ohqSystem.get(), precip);
+
     std::cout << "[Runner] Solving...\n";
     ohqSystem->Solve();
 
     // ------------------------------------------------------------------
-    // 3.  Write simulation outputs to outputDir
+    // Outputs
     // ------------------------------------------------------------------
+    const QString stageTag = isAdvance ? "_output.txt" : "_forecast_output.txt";
     const QString outputFile =
         QString::fromStdString(m_config.outputDir) + "/" +
-        intervalStart.toString("yyyyMMdd_HHmmss") + "_output.txt";
+        stageStart.toString("yyyyMMdd_HHmmss") + stageTag;
 
     std::cout << "[Runner] Writing output to: " << outputFile.toStdString() << "\n";
-    ohqSystem->GetOutputs().write(outputFile.toStdString());
+    ohqSystem->GetObservedOutputs().write(outputFile.toStdString());
+    result.outputFilePath = outputFile;
 
+    // Capture the observed outputs for the (future) merge step.
+    result.observed = ohqSystem->GetObservedOutputs();
+
+    // ------------------------------------------------------------------
+    // Stage-specific side effects
+    // ------------------------------------------------------------------
+    if (isAdvance)
+    {
+        // Export configured state variables
+        for (const auto &exp : m_config.stateVarExports)
+            ohqSystem->SaveStateVariableToJson(exp.variable, exp.outputPath);
+
+        // Save model snapshot (drives next cycle)
+        const QString modelSnapshotPath =
+            QString::fromStdString(m_config.modelSnapshotDir) + "/" +
+            stageStart.toString("yyyyMMdd_HHmmss") + "_model.json";
+        ohqSystem->SavetoJson(modelSnapshotPath.toStdString(),
+                              ohqSystem->addedtemplates, false, true);
+
+        // Full state for visualization
+        const QString vizStatePath =
+            QString::fromStdString(m_config.outputDir) + "/viz_state.json";
+        ohqSystem->SaveFullStateTo(vizStatePath);
+        std::cout << "[Runner] Viz state written to: "
+                  << vizStatePath.toStdString() << "\n";
+
+        const QString vizJsonPath =
+            QCoreApplication::applicationDirPath() + "/viz.json";
+        const QString vizSvgPath  =
+            QString::fromStdString(m_config.outputDir) + "/viz.svg";
+        const QJsonObject fullState = readJson(vizStatePath);
+        QString vizErr;
+        if (!VizRenderer::render(vizJsonPath, fullState, vizSvgPath, vizErr))
+            std::cerr << "[Runner] VizRenderer warning: " << vizErr.toStdString() << "\n";
+        else
+            std::cout << "[Runner] viz.svg written to: " << vizSvgPath.toStdString() << "\n";
+        result.vizSvgPath = vizSvgPath;
+
+        // State snapshot in stateDir (this is what next cycle picks up)
+        QJsonObject savedState = readJson(modelSnapshotPath);
+        savedState["_dt_interval_start_utc"] = stageStart.toString(Qt::ISODate);
+        savedState["_dt_interval_end_utc"]   = stageEnd.toString(Qt::ISODate);
+        savedState["_dt_next_start_utc"]     = stageEnd.toString(Qt::ISODate);
+        savedState["_dt_runs_completed"]     = m_runsCompleted + 1;
+        savedState["_dt_output_file"]        = outputFile;
+
+        const QString snapshotPath =
+            QString::fromStdString(m_config.stateDir) + "/" +
+            makeSnapshotFilename(stageEnd);
+        if (!writeJson(savedState, snapshotPath))
+            std::cerr << "[Runner] Warning: failed to write state snapshot\n";
+        else
+            std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString() << "\n";
+        result.stateSnapshotPath = snapshotPath;
+    }
+    else // Forecast
+    {
+        // Forecast viz: independent SVG, generated from forecast end-state.
+        // No model snapshot, no state snapshot, no state-variable exports.
+        const QString forecastVizStatePath =
+            QString::fromStdString(m_config.outputDir) + "/forecast_viz_state.json";
+        ohqSystem->SaveFullStateTo(forecastVizStatePath);
+
+        const QString vizJsonPath =
+            QCoreApplication::applicationDirPath() + "/viz.json";
+        const QString forecastVizSvgPath =
+            QString::fromStdString(m_config.outputDir) + "/forecast_viz.svg";
+        const QJsonObject fullState = readJson(forecastVizStatePath);
+        QString vizErr;
+        if (!VizRenderer::render(vizJsonPath, fullState, forecastVizSvgPath, vizErr))
+            std::cerr << "[Runner] Forecast VizRenderer warning: "
+                      << vizErr.toStdString() << "\n";
+        else
+            std::cout << "[Runner] forecast_viz.svg written to: "
+                      << forecastVizSvgPath.toStdString() << "\n";
+        result.vizSvgPath = forecastVizSvgPath;
+    }
+
+    result.ok = true;
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// mergeIntoSelectedOutput
+// Maintains selected_output.csv as:
+//     [actuals up to advanceEnd] + [forecast tail (advanceEnd, advanceEnd+H]]
+//
+// Each cycle:
+//   1. Load existing CSV (if any) into a TimeSeriesSet.
+//   2. Knockout at (advanceStart - epsilon) to drop the previous cycle's
+//      forecast tail (which started at the previous advanceStart and now
+//      should be replaced by today's authoritative actuals + new forecast).
+//   3. Append the Advance observed rows ([advanceStart, advanceEnd]).
+//   4. Append the Forecast observed rows whose t > advanceEnd
+//      (i.e. the forecast tail beyond the just-added Advance window).
+//   5. Write back with full header.
+//
+// Series are matched by name across loaded / advance / forecast sets.
+// ---------------------------------------------------------------------------
+bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
+                                       const TimeSeriesSet<double> &forecastObs,
+                                       double cutoffTime)
+{
     const QString selectedOutputFile =
         QString::fromStdString(m_config.outputDir) + "/selected_output.csv";
 
-    if (!m_selectedOutputWritten) {
-        ohqSystem->GetObservedOutputs().write(selectedOutputFile.toStdString());
-        m_selectedOutputWritten = true;
-    } else {
-        ohqSystem->GetObservedOutputs().appendtofile(selectedOutputFile.toStdString());
-    }
-    std::cout << "[Runner] Selected output written to: " << selectedOutputFile.toStdString() << "\n";
+    // Tiny epsilon in day units to drop the boundary point from the
+    // previous cycle so today's Advance can re-supply it without duplication.
+    // ~0.5 ms in days = 5.787e-9. We use 1e-6 (≈86 ms) to be safely above
+    // any float round-trip in CSV write/read cycles.
+    constexpr double kBoundaryEpsilonDays = 1e-6;
 
     // ------------------------------------------------------------------
-    // 4.  Export any requested state variables
+    // 1. Load existing file (or start fresh)
     // ------------------------------------------------------------------
-    for (const auto &exp : m_config.stateVarExports)
+    TimeSeriesSet<double> merged;
+    QFileInfo fi(selectedOutputFile);
+    if (fi.exists() && fi.size() > 0)
     {
-        ohqSystem->SaveStateVariableToJson(exp.variable, exp.outputPath);
-    }
-
-    // ------------------------------------------------------------------
-    // 5.  Save timestamped model snapshot (the "end state")
-    // ------------------------------------------------------------------
-    const QString snapshotFilename = makeSnapshotFilename(intervalEnd);
-    const QString snapshotPath =
-        QString::fromStdString(m_config.stateDir) + "/" + snapshotFilename;
-
-    const QString modelSnapshotPath =
-        QString::fromStdString(m_config.modelSnapshotDir) + "/" +
-        intervalStart.toString("yyyyMMdd_HHmmss") + "_model.json";
-
-    // Save the OHQ system state to the model snapshot dir
-    ohqSystem->SavetoJson(modelSnapshotPath.toStdString(),
-                       ohqSystem->addedtemplates, false, true);
-
-
-    // Save full state (all derived/expression variables) for visualization
-    const QString vizStatePath =
-        QString::fromStdString(m_config.outputDir) + "/viz_state.json";
-    ohqSystem->SaveFullStateTo(vizStatePath);
-    std::cout << "[Runner] Viz state written to: " << vizStatePath.toStdString() << "\n";
-
-
-    // Load it back so we can annotate it with runner metadata
-    QJsonObject savedState = readJson(modelSnapshotPath);
-
-    const QString vizJsonPath =
-        QCoreApplication::applicationDirPath() + "/viz.json";
-    const QString vizSvgPath  =
-        QString::fromStdString(m_config.outputDir) + "/viz.svg";
-    const QJsonObject fullState = readJson(vizStatePath);
-    QString vizErr;
-    if (!VizRenderer::render(vizJsonPath, fullState, vizSvgPath, vizErr))
-        std::cerr << "[Runner] VizRenderer warning: " << vizErr.toStdString() << "\n";
-    else
-        std::cout << "[Runner] viz.svg written to: " << vizSvgPath.toStdString() << "\n";
-
-    // Annotate with runner bookkeeping fields (prefixed _runner_ to
-    // avoid clashing with OHQ keys)
-    savedState["_dt_interval_start_utc"] = intervalStart.toString(Qt::ISODate);
-    savedState["_dt_interval_end_utc"]   = intervalEnd.toString(Qt::ISODate);
-    savedState["_dt_next_start_utc"]     = intervalEnd.toString(Qt::ISODate);
-    savedState["_dt_runs_completed"]     = m_runsCompleted + 1;
-    savedState["_dt_output_file"]        = outputFile;
-
-    // Write the annotated snapshot to stateDir
-    if (!writeJson(savedState, snapshotPath))
-    {
-        std::cerr << "[Runner] Warning: failed to write state snapshot\n";
-        // Non-fatal: outputs were already written
+        TimeSeriesSet<double> loaded(selectedOutputFile.toStdString(), true);
+        if (loaded.file_not_found)
+        {
+            std::cerr << "[Runner] mergeIntoSelectedOutput: failed to read "
+                      << selectedOutputFile.toStdString()
+                      << " — starting fresh.\n";
+        }
+        else
+        {
+            merged = loaded;
+            // 2. Drop the previous cycle's forecast tail.
+            merged.knockout(cutoffTime - kBoundaryEpsilonDays);
+        }
     }
     else
     {
-        std::cout << "[Runner] State snapshot: " << snapshotPath.toStdString() << "\n";
+        // Bootstrap: take the structure (series + names) from advanceObs.
+        // No rows yet; they get added in step 3.
+        for (size_t i = 0; i < advanceObs.size(); ++i)
+        {
+            TimeSeries<double> empty;
+            empty.setName(advanceObs[i].name());
+            merged.push_back(empty);
+        }
+    }
+
+    // Helper: find a series in `merged` by name; create it if missing.
+    auto findOrCreate = [&merged](const std::string &name) -> TimeSeries<double>& {
+        for (size_t i = 0; i < merged.size(); ++i)
+            if (merged[i].name() == name)
+                return merged[i];
+        TimeSeries<double> empty;
+        empty.setName(name);
+        merged.push_back(empty);
+        return merged.back();
+    };
+
+    // ------------------------------------------------------------------
+    // 3. Append Advance observed rows (the new actuals).
+    // ------------------------------------------------------------------
+    for (size_t i = 0; i < advanceObs.size(); ++i)
+    {
+        const TimeSeries<double> &src = advanceObs[i];
+        TimeSeries<double> &dst = findOrCreate(src.name());
+        for (size_t j = 0; j < src.size(); ++j)
+        {
+            const auto &pt = src[j];
+            dst.append(pt.t, pt.c);
+        }
     }
 
     // ------------------------------------------------------------------
-    // 6.  Advance timing for next interval
+    // 4. Append Forecast observed rows beyond advanceEnd (the forecast tail).
+    //    cutoffTime here is advanceStart, not advanceEnd — we need the
+    //    Advance window's *end* to slice the forecast.
+    //    The orchestrator passes advanceEnd as a separate argument… except
+    //    we only have cutoffTime in this signature. We derive advanceEnd
+    //    by taking the last Advance timestamp seen above.
     // ------------------------------------------------------------------
-    ++m_runsCompleted;
-    m_nextIntervalStart = intervalEnd;
+    double advanceLastT = cutoffTime;  // fallback if Advance is empty
+    if (!advanceObs.empty())
+    {
+        for (size_t i = 0; i < advanceObs.size(); ++i)
+        {
+            const TimeSeries<double> &src = advanceObs[i];
+            if (!src.empty())
+                advanceLastT = std::max(advanceLastT, src[src.size() - 1].t);
+        }
+    }
 
-    std::cout << "[Runner] Interval complete. Next start: "
-              << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
+    for (size_t i = 0; i < forecastObs.size(); ++i)
+    {
+        const TimeSeries<double> &src = forecastObs[i];
+        TimeSeries<double> &dst = findOrCreate(src.name());
+        for (size_t j = 0; j < src.size(); ++j)
+        {
+            const auto &pt = src[j];
+            if (pt.t > advanceLastT)
+                dst.append(pt.t, pt.c);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Write back (full file with header)
+    // ------------------------------------------------------------------
+    merged.write(selectedOutputFile.toStdString());
+    std::cout << "[Runner] selected_output.csv merged: "
+              << merged.size() << " series, "
+              << merged.maxnumpoints() << " max rows\n";
+
     return true;
 }
 

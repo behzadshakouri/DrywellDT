@@ -129,6 +129,7 @@ bool DTConfig::load(QString &errorMessage)
 
     startDatetime = raw.value("start_datetime").toString().toStdString();
     intervalStr   = raw.value("interval").toString("1day").toStdString();
+    forecastHorizonStr = raw.value("forecast_horizon").toString().toStdString();
 
     // --- parse interval ---
     QString intervalErr;
@@ -137,6 +138,22 @@ bool DTConfig::load(QString &errorMessage)
     {
         errorMessage = "config.json interval error: " + intervalErr;
         return false;
+    }
+
+    // --- parse forecast horizon (optional) ---
+    if (!forecastHorizonStr.empty())
+    {
+        QString horizonErr;
+        forecastHorizonMs = parseIntervalMs(forecastHorizonStr, horizonErr);
+        if (forecastHorizonMs < 0)
+        {
+            errorMessage = "config.json forecast_horizon error: " + horizonErr;
+            return false;
+        }
+    }
+    else
+    {
+        forecastHorizonMs = 0;
     }
 
     // --- state_variables array ---
@@ -170,6 +187,11 @@ bool DTConfig::load(QString &errorMessage)
               << "[Config] model_snapshot_dir: " << modelSnapshotDir << "\n"
               << "[Config] interval          : " << intervalStr
               << " (" << intervalMs << " ms)\n";
+    if (forecastHorizonMs > 0)
+        std::cout << "[Config] forecast_horizon  : " << forecastHorizonStr
+                  << " (" << forecastHorizonMs << " ms)\n";
+    else
+        std::cout << "[Config] forecast_horizon  : disabled\n";
     std::cout << "[Config] noaa_office       : " << noaaOffice << "\n"
               << "[Config] noaa_grid_x       : " << noaaGridX  << "\n"
               << "[Config] noaa_grid_y       : " << noaaGridY  << "\n";

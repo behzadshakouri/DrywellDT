@@ -3,7 +3,10 @@
 #endif
 
 #include "MainWindow.h"
+#include "OhqTime.h"
+
 #include <QBrush>
+#include <QButtonGroup>
 #include <QColor>
 #include <QCursor>
 #include <QDateTime>
@@ -27,6 +30,15 @@
 #include <QSvgWidget>
 #include <limits>
 
+#include <QtCharts/QChart>
+#include <QtCharts/QChartView>
+#include <QtCharts/QDateTimeAxis>
+#include <QtCharts/QLegend>
+#include <QtCharts/QLegendMarker>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QValueAxis>
+// Qt 6 QtCharts: classes are in the global namespace — no `using namespace` needed.
+
 // ------------------------------------------------------------------
 // Per-series line colors. Cycles for series 6..N.
 // ------------------------------------------------------------------
@@ -41,14 +53,6 @@ static QString statusHtml(const QString &color, const QString &text)
     return QString("<span style='color:%1; font-size:14px;'>&#9679;</span>"
                    " <span>%2</span>").arg(color, text.toHtmlEscaped());
 }
-
-#include <QtCharts/QChart>
-#include <QtCharts/QChartView>
-#include <QtCharts/QDateTimeAxis>
-#include <QtCharts/QLegend>
-#include <QtCharts/QLineSeries>
-#include <QtCharts/QValueAxis>
-// Qt 6 QtCharts: classes are in the global namespace — no `using namespace` needed.
 
 // Default CSV location when served by nginx locally, alongside the wasm.
 // The user can edit this field in the UI.
@@ -108,7 +112,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     root->addWidget(m_statusLabel);
 
     // ---- splitter: charts (left) | SVG viz (right) ----
-    // ---- splitter: charts (left) | SVG viz (right) ----
     auto *splitter = new QSplitter(Qt::Horizontal);
     splitter->setHandleWidth(6);
     splitter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -124,13 +127,78 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_chartsLayout->setSpacing(14);
     scroll->setWidget(chartsHost);
 
-    // right: SVG panel
+    // right: SVG panel with Current/Forecast toggle on top
+    auto *svgPanel  = new QWidget();
+    auto *svgLayout = new QVBoxLayout(svgPanel);
+    svgLayout->setContentsMargins(0, 0, 0, 0);
+    svgLayout->setSpacing(8);
+
+    // Segmented pill toggle: two buttons inside a rounded frame, styled
+    // so that the checked half is filled and the unchecked half is text-only.
+    auto *toggleRow = new QHBoxLayout();
+    toggleRow->setContentsMargins(0, 0, 0, 0);
+    toggleRow->setSpacing(0);
+
+    auto *pill = new QFrame();
+    pill->setObjectName("ModePill");
+    auto *pillLayout = new QHBoxLayout(pill);
+    pillLayout->setContentsMargins(2, 2, 2, 2);
+    pillLayout->setSpacing(0);
+
+    m_currentBtn  = new QPushButton("Current");
+    m_forecastBtn = new QPushButton("Forecast");
+    m_currentBtn ->setObjectName("ModePillBtn");
+    m_forecastBtn->setObjectName("ModePillBtn");
+    m_currentBtn ->setCheckable(true);
+    m_forecastBtn->setCheckable(true);
+    m_currentBtn ->setChecked(true);
+    m_currentBtn ->setCursor(Qt::PointingHandCursor);
+    m_forecastBtn->setCursor(Qt::PointingHandCursor);
+
+    auto *modeGroup = new QButtonGroup(this);
+    modeGroup->setExclusive(true);
+    modeGroup->addButton(m_currentBtn);
+    modeGroup->addButton(m_forecastBtn);
+
+    pillLayout->addWidget(m_currentBtn);
+    pillLayout->addWidget(m_forecastBtn);
+
+    pill->setStyleSheet(R"(
+        QFrame#ModePill {
+            background-color: #F1F3F5;
+            border: 1px solid #E1E5EB;
+            border-radius: 14px;
+        }
+        QPushButton#ModePillBtn {
+            background-color: transparent;
+            border: none;
+            border-radius: 12px;
+            color: #6B7684;
+            font-weight: 500;
+            padding: 5px 18px;
+            min-height: 18px;
+        }
+        QPushButton#ModePillBtn:hover:!checked {
+            color: #1E2A38;
+        }
+        QPushButton#ModePillBtn:checked {
+            background-color: #FFFFFF;
+            color: #1E2A38;
+            font-weight: 600;
+        }
+    )");
+
+    toggleRow->addWidget(pill);
+    toggleRow->addStretch(1);
+    svgLayout->addLayout(toggleRow);
+
     m_svgWidget = new QSvgWidget();
     m_svgWidget->setMinimumWidth(280);
     m_svgWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    svgLayout->addWidget(m_svgWidget, 1);
 
     splitter->addWidget(scroll);
-    splitter->addWidget(m_svgWidget);
+    splitter->addWidget(svgPanel);
 
     // Set initial sizes explicitly: 2/3 charts, 1/3 svg
     splitter->setSizes({780, 390});
@@ -151,12 +219,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(&m_loader, &CsvLoader::failed, this, &MainWindow::onFailed);
     connect(&m_timer,  &QTimer::timeout,   this, &MainWindow::onRefreshClicked);
 
-    m_timer.setInterval(m_refreshSeconds * 1000);
-    m_timer.start();
+    connect(m_currentBtn,  &QPushButton::clicked, this, &MainWindow::onModeToggled);
+    connect(m_forecastBtn, &QPushButton::clicked, this, &MainWindow::onModeToggled);
 
     m_timer.setInterval(m_refreshSeconds * 1000);
     // Don't start timer or fetch yet — wait for config
-    loadConfig();  // <-- replaces onRefreshClicked()
+    loadConfig();
 }
 
 void MainWindow::loadConfig()
@@ -183,17 +251,29 @@ void MainWindow::onConfigReply(QNetworkReply *reply)
     reply->deleteLater();
     if (reply->error() == QNetworkReply::NoError) {
         const QByteArray data = reply->readAll();
-        qDebug() << "Config raw:" << data;
         const QJsonDocument doc = QJsonDocument::fromJson(data);
-        qDebug() << "Config parsed:" << doc.object();
-        const QString url = doc.object().value("csv_url").toString();
-        qDebug() << "CSV URL from config:" << url;
-        if (!url.isEmpty()) {
-            m_url = QUrl(url);
-        }
-        const QString svgUrl = doc.object().value("viz_state_url").toString();
-        if (!svgUrl.isEmpty())
-            m_svgUrl = QUrl(svgUrl);
+        const QJsonObject obj = doc.object();
+
+        const QString csv  = obj.value("csv_url").toString();
+        if (!csv.isEmpty()) m_url = QUrl(csv);
+
+        const QString viz  = obj.value("viz_url").toString();
+        if (!viz.isEmpty()) m_vizUrl = QUrl(viz);
+
+        const QString vizS = obj.value("viz_state_url").toString();
+        if (!vizS.isEmpty()) m_vizStateUrl = QUrl(vizS);
+
+        const QString fviz  = obj.value("forecast_viz_url").toString();
+        if (!fviz.isEmpty()) m_forecastVizUrl = QUrl(fviz);
+
+        const QString fvizS = obj.value("forecast_viz_state_url").toString();
+        if (!fvizS.isEmpty()) m_forecastVizStateUrl = QUrl(fvizS);
+
+        qDebug() << "Config: csv="          << m_url
+                 << "viz="                  << m_vizUrl
+                 << "viz_state="            << m_vizStateUrl
+                 << "forecast_viz="         << m_forecastVizUrl
+                 << "forecast_viz_state="   << m_forecastVizStateUrl;
     } else {
         qDebug() << "Config load error:" << reply->error() << reply->errorString();
     }
@@ -203,10 +283,29 @@ void MainWindow::onConfigReply(QNetworkReply *reply)
 
 void MainWindow::onRefreshClicked()
 {
-    m_statusLabel->setText(statusHtml("#F59E0B",
-                                      QString("Fetching …")));
+    m_statusLabel->setText(statusHtml("#F59E0B", QString("Fetching …")));
     m_loader.fetch(m_url);
-    fetchSvg();   // <-- add this
+
+    // Current SVG
+    if (!m_vizUrl.isEmpty()) {
+        QNetworkReply *r = m_svgNam.get(QNetworkRequest(m_vizUrl));
+        connect(r, &QNetworkReply::finished, this, [this, r]() { onSvgFetched(r); });
+    }
+    // Forecast SVG
+    if (!m_forecastVizUrl.isEmpty()) {
+        QNetworkReply *r = m_forecastSvgNam.get(QNetworkRequest(m_forecastVizUrl));
+        connect(r, &QNetworkReply::finished, this, [this, r]() { onForecastSvgFetched(r); });
+    }
+    // Current viz state JSON (for the boundary timestamp)
+    if (!m_vizStateUrl.isEmpty()) {
+        QNetworkReply *r = m_vizStateNam.get(QNetworkRequest(m_vizStateUrl));
+        connect(r, &QNetworkReply::finished, this, [this, r]() { onVizStateFetched(r); });
+    }
+    // Forecast viz state JSON (for the forecast-end timestamp)
+    if (!m_forecastVizStateUrl.isEmpty()) {
+        QNetworkReply *r = m_forecastVizStateNam.get(QNetworkRequest(m_forecastVizStateUrl));
+        connect(r, &QNetworkReply::finished, this, [this, r]() { onForecastVizStateFetched(r); });
+    }
 }
 
 void MainWindow::onIntervalChanged(int seconds)
@@ -230,9 +329,9 @@ void MainWindow::onLoaded(const QVector<CsvSeries> &series)
 {
     m_lastData = series;
     m_statusLabel->setText(statusHtml("#10B981",
-        QString("Loaded %1 series at %2")
-            .arg(series.size())
-            .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"))));
+                                      QString("Loaded %1 series at %2")
+                                          .arg(series.size())
+                                          .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"))));
     display();
 }
 
@@ -373,6 +472,8 @@ void MainWindow::rebuildPanels(const QVector<CsvSeries> &series)
         m_chartsLayout->addWidget(panel.view);
         m_panels.push_back(panel);
     }
+
+    applyBoundaryToPanels();
 }
 
 void MainWindow::updatePanels(const QVector<CsvSeries> &series)
@@ -387,20 +488,107 @@ void MainWindow::updatePanels(const QVector<CsvSeries> &series)
             p.axisY->setRange(s.yMin, s.yMax);
         }
     }
+
+    applyBoundaryToPanels();
 }
 
-void MainWindow::fetchSvg()
-{
-    if (m_svgUrl.isEmpty()) return;
-    QNetworkReply *reply = m_svgNam.get(QNetworkRequest(m_svgUrl));
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        onSvgFetched(reply);
-    });
-}
-
+// ---------------------------------------------------------------------------
+// SVG / state JSON fetch handlers
+// ---------------------------------------------------------------------------
 void MainWindow::onSvgFetched(QNetworkReply *reply)
 {
     reply->deleteLater();
-    if (reply->error() == QNetworkReply::NoError)
-        m_svgWidget->load(reply->readAll());
+    if (reply->error() == QNetworkReply::NoError) {
+        m_currentSvgBytes = reply->readAll();
+        applySvgForCurrentMode();
+    }
+}
+
+void MainWindow::onForecastSvgFetched(QNetworkReply *reply)
+{
+    reply->deleteLater();
+    if (reply->error() == QNetworkReply::NoError) {
+        m_forecastSvgBytes = reply->readAll();
+        applySvgForCurrentMode();
+    }
+}
+
+void MainWindow::onVizStateFetched(QNetworkReply *reply)
+{
+    reply->deleteLater();
+    if (reply->error() != QNetworkReply::NoError) return;
+    parseVizStateBoundary(reply->readAll(), m_advanceEndMs);
+    applyBoundaryToPanels();
+}
+
+void MainWindow::onForecastVizStateFetched(QNetworkReply *reply)
+{
+    reply->deleteLater();
+    if (reply->error() != QNetworkReply::NoError) return;
+    parseVizStateBoundary(reply->readAll(), m_forecastEndMs);
+    // No chart redraw needed for the forecast-end value alone right now.
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+void MainWindow::parseVizStateBoundary(const QByteArray &data, qint64 &outMs)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) return;
+
+    const QJsonObject root   = doc.object();
+    const QJsonObject solver = root.value("solver_state").toObject();
+    if (!solver.contains("t")) return;
+
+    const double serial = solver.value("t").toDouble();
+    outMs = ohqSerialToMsEpoch(serial);
+}
+
+void MainWindow::applySvgForCurrentMode()
+{
+    const QByteArray &bytes = m_showForecast ? m_forecastSvgBytes : m_currentSvgBytes;
+    if (!bytes.isEmpty())
+        m_svgWidget->load(bytes);
+}
+
+void MainWindow::onModeToggled()
+{
+    m_showForecast = m_forecastBtn->isChecked();
+    applySvgForCurrentMode();
+}
+
+void MainWindow::applyBoundaryToPanels()
+{
+    if (m_advanceEndMs < 0) return;
+
+    const QColor boundaryColor("#9CA3AF");  // gray
+    QPen pen(boundaryColor);
+    pen.setWidthF(1.4);
+    pen.setStyle(Qt::DashLine);
+
+    for (auto &p : m_panels) {
+        if (!p.chart || !p.axisX || !p.axisY) continue;
+
+        // Lazily create the boundary series
+        if (!p.boundary) {
+            p.boundary = new QLineSeries();
+            p.boundary->setName("now");
+            p.boundary->setPen(pen);
+            p.chart->addSeries(p.boundary);
+            p.boundary->attachAxis(p.axisX);
+            p.boundary->attachAxis(p.axisY);
+            // Hide from legend (it's metadata, not data)
+            const auto markers = p.chart->legend()->markers(p.boundary);
+            for (auto *m : markers) m->setVisible(false);
+        }
+
+        // Span the current Y range so the line is full-height
+        const double yMin = p.axisY->min();
+        const double yMax = p.axisY->max();
+        QVector<QPointF> pts;
+        pts.append(QPointF(static_cast<qreal>(m_advanceEndMs), yMin));
+        pts.append(QPointF(static_cast<qreal>(m_advanceEndMs), yMax));
+        p.boundary->replace(pts);
+    }
 }

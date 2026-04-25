@@ -9,9 +9,36 @@
 #include <string>
 #include "noaaweatherfetcher.h"
 #include "Precipitation.h"
+#include "TimeSeriesSet.h"
 
 
 class System;
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// StageKind
+// Distinguishes the two solves performed in each cycle:
+//   Advance  — short window [t, t+Δ]; its end-state drives the next cycle.
+//   Forecast — longer window [t, t+Δ+H]; its outputs are published but the
+//              end-state is discarded.
+// ---------------------------------------------------------------------------
+enum class StageKind { Advance, Forecast };
+
+// ---------------------------------------------------------------------------
+// StageResult
+// What runStage() hands back to the orchestrator.  Holds the observed-output
+// time series (for the selected_output.csv merge) plus a handful of paths
+// useful for logging or downstream wiring.
+// ---------------------------------------------------------------------------
+struct StageResult
+{
+    bool                   ok = false;
+    StageKind              kind = StageKind::Advance;
+    TimeSeriesSet<double>  observed;       // copy of GetObservedOutputs()
+    QString                outputFilePath; // e.g. *_output.txt or *_forecast_output.txt
+    QString                vizSvgPath;     // viz.svg or forecast_viz.svg (Advance only writes state snapshot)
+    QString                stateSnapshotPath; // populated for Advance stage only
+};
 
 // ---------------------------------------------------------------------------
 // DTRunner
@@ -40,8 +67,18 @@ public:
     bool init(QString &errorMessage);
 
 public slots:
-    // Triggered by QTimer (or called directly for an immediate first run).
-    // Returns true on success.
+    // Owns the simulation loop.  Each call to runOnce():
+    //   1. Runs the Advance stage on [t, t+Δ]; saves the end-state snapshot
+    //      that drives the next cycle.
+    //   2. Optionally runs the Forecast stage on [t, t+Δ+H] from the same
+    //      initial state; its end-state is discarded.
+    //   3. Merges both stages into selected_output.csv via read-knockout-append-
+    //      write so the file always holds actuals up to t+Δ followed by the
+    //      latest forecast tail.
+    //
+    // The runner is intentionally a QObject so it can be connected to QTimer
+    // and, later, to Crow API callbacks.
+    // ---------------------------------------------------------------------------
     bool runOnce();
 
 private:
@@ -83,6 +120,29 @@ private:
     void injectPrecipitation(System *system, const CPrecipitation &precip);
 
     // -----------------------------------------------------------------------
+    // Two-stage simulation helpers (Step 2 declarations)
+    // -----------------------------------------------------------------------
+
+    // Run a single solve over [stageStart, stageEnd].
+    //   - For StageKind::Advance: saves model snapshot + state snapshot,
+    //     writes viz, writes *_output.txt.
+    //   - For StageKind::Forecast: writes *_forecast_output.txt and
+    //     forecast_viz.svg only; no state side-effects.
+    // Both stages start from the same initial-condition path
+    // (modelJsonPath empty → cold start from script).
+    StageResult runStage(StageKind kind,
+                         const QDateTime &stageStart,
+                         const QDateTime &stageEnd,
+                         const QString &modelJsonPath);
+
+    // Read selected_output.csv (if present), drop rows past `cutoffTime`,
+    // append the Advance and Forecast observed series, write back.
+    // `cutoffTime` is in OHQ day-serial units.
+    bool mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
+                                 const TimeSeriesSet<double> &forecastObs,
+                                 double cutoffTime);
+
+    // -----------------------------------------------------------------------
     // State
     // -----------------------------------------------------------------------
     const DTConfig &m_config;
@@ -94,8 +154,14 @@ private:
     // OHQ interval length expressed in days (derived from config.intervalMs).
     double m_intervalDays = 1.0;
 
+    // Forecast horizon in days (0 = forecast disabled, Stage B skipped).
+    double m_forecastDays = 0.0;
+
     // How many intervals have completed successfully.
     int m_runsCompleted = 0;
 
     bool m_selectedOutputWritten = false;
 };
+
+
+

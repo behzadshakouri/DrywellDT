@@ -7,7 +7,7 @@ CONFIG -= app_bundle
 CONFIG += c++14
 
 # Set to 1 to compile OHQ from source, 0 to use the shared library
-OHQ_FROM_SOURCE = 0
+OHQ_FROM_SOURCE = 1
 
 INCLUDEPATH += ../OpenHydroQual/aquifolium/include
 INCLUDEPATH += ../OpenHydroQual/aquifolium/src
@@ -28,7 +28,7 @@ TEMPLATE = app
 win32:QMAKE_CXXFLAGS += /MP
 
 # ── OHQ: source vs library ───────────────────────────────────────
-equals(OHQ_FROM_SOURCE, 1) {
+equals(OHQ_FROM_SOURCE, 0) {
     message(Building with OHQ source files)
     SOURCES += \
         ../OpenHydroQual/aquifolium/src/Block.cpp \

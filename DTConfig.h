@@ -50,6 +50,13 @@ public:
     // Optional fixed start datetime (ISO 8601). Empty = use current time.
     std::string startDatetime;
 
+    // --- forecast horizon ---
+    // Optional duration of the Stage B forecast window beyond the advance interval.
+    // Same syntax as intervalStr ("6day", "12hr", etc.).
+    // Empty / 0 = forecast disabled (Stage B is skipped).
+    std::string forecastHorizonStr;
+    qint64      forecastHorizonMs = 0;
+
     // --- state variable exports ---
     std::vector<StateVarExport> stateVarExports;
 
