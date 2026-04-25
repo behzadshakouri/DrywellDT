@@ -37,6 +37,7 @@
 #include <QtCharts/QLegendMarker>
 #include <QtCharts/QLineSeries>
 #include <QtCharts/QValueAxis>
+#include <QUrlQuery>
 // Qt 6 QtCharts: classes are in the global namespace — no `using namespace` needed.
 
 // ------------------------------------------------------------------
@@ -240,7 +241,19 @@ void MainWindow::loadConfig()
         QCoreApplication::applicationDirPath() + "/config.json");
 #endif
 
-    QNetworkReply *reply = m_configNam.get(QNetworkRequest(configUrl));
+    // Cache-bust: Browsers (especially in WASM contexts) aggressively cache
+    // config.json, so changes to the deployed config don't propagate even on
+    // hard-refresh. Append a timestamp query parameter and force AlwaysNetwork.
+    QUrl bustedUrl = configUrl;
+    QUrlQuery q(bustedUrl);
+    q.addQueryItem(QStringLiteral("_t"),
+                   QString::number(QDateTime::currentMSecsSinceEpoch()));
+    bustedUrl.setQuery(q);
+
+    QNetworkRequest req(bustedUrl);
+    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
+                     QNetworkRequest::AlwaysNetwork);
+    QNetworkReply *reply = m_configNam.get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onConfigReply(reply);
     });

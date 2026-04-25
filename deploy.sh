@@ -66,15 +66,18 @@ log "Viewer built."
 # =============================================================================
 log "Writing AWS config files..."
 
-# Viewer config.json
+# FIX 1: Removed duplicate opening brace '{{' — was invalid JSON
 cat > "${VIEWER_BUILD}/config.json" << 'EOF'
 {
-    "csv_url":      "http://34.221.236.134:8081/outputs/selected_output.csv",
-    "viz_state_url":"http://34.221.236.134:8081/outputs/viz.svg"
+    "csv_url":                "http://34.221.236.134:8081/outputs/selected_output.csv",
+    "viz_url":                "http://34.221.236.134:8081/outputs/viz.svg",
+    "viz_state_url":          "http://34.221.236.134:8081/outputs/viz_state.json",
+    "forecast_viz_url":       "http://34.221.236.134:8081/outputs/forecast_viz.svg",
+    "forecast_viz_state_url": "http://34.221.236.134:8081/outputs/forecast_viz_state.json"
 }
 EOF
 
-# Runner config.json for EC2 paths
+# FIX 2: Added forecast_horizon so the runner actually generates forecast_viz.svg
 cat > /tmp/drywelldt_runner_config.json << 'EOF'
 {
     "script_file":        "/home/ubuntu/drywelldt/models/simple_pond_catchment.ohq",
@@ -90,6 +93,7 @@ cat > /tmp/drywelldt_runner_config.json << 'EOF'
     "noaa_grid_x":        96,
     "noaa_grid_y":        70,
     "interval":           "7day",
+    "forecast_horizon":   "7day",
     "start_datetime":     "",
     "state_variables": [
         {
@@ -155,10 +159,11 @@ WRAPPER
 chmod +x "${BUNDLE_DIR}/run_drywelldt.sh"
 
 # =============================================================================
-# Step 6 — Create remote directory structure
+# Step 6 — Create remote directory structure and clear stale state/outputs
 # =============================================================================
-log "Creating remote directories..."
+log "Creating remote directories, clearing stale state, and stopping service..."
 eval "${SSH_CMD}" << 'ENDSSH'
+sudo systemctl stop drywelldt 2>/dev/null || true
 mkdir -p /home/ubuntu/drywelldt/bin
 mkdir -p /home/ubuntu/drywelldt/lib
 mkdir -p /home/ubuntu/drywelldt/outputs
@@ -166,8 +171,14 @@ mkdir -p /home/ubuntu/drywelldt/state
 mkdir -p /home/ubuntu/drywelldt/snapshots
 mkdir -p /home/ubuntu/drywelldt/models
 sudo mkdir -p /var/www/drywelldt
-mkdir -p /home/ubuntu/drywelldt/outputs
 sudo chown ubuntu:ubuntu /var/www/drywelldt
+
+# FIX 3: Clear stale outputs and state so the runner starts clean
+rm -f /home/ubuntu/drywelldt/outputs/*
+rm -f /home/ubuntu/drywelldt/state/*
+
+# Remove old binary in case it's still locked from a hung process
+rm -f /home/ubuntu/drywelldt/bin/DryWellDT
 ENDSSH
 
 # =============================================================================
@@ -194,7 +205,6 @@ eval "${SCP_CMD} \
     \"${BUNDLE_DIR}/plugins/tls/libqopensslbackend.so\" \
     ${EC2_USER}@${EC2_HOST}:/home/ubuntu/drywelldt/plugins/tls/"
 
-log "Transferring resources..."
 log "Transferring resources (JSON only)..."
 eval "${SSH_CMD}" "mkdir -p ${EC2_BIN}/resources"
 eval "${SCP_CMD} \
@@ -212,10 +222,18 @@ eval "${SCP_CMD} \
     /tmp/drywelldt_runner_config.json \
     ${EC2_USER}@${EC2_HOST}:${EC2_BIN}/config.json"
 
-log "Transferring model script..."
+# FIX 4: Patch hardcoded local paths in .ohq model file before transferring
+log "Patching model script paths for EC2..."
+sed \
+    -e "s|/home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources|/home/ubuntu/drywelldt/bin/resources|g" \
+    -e "s|timeseries=/home/arash/Projects/DrywellDT/outputs/[^,]*|timeseries=|g" \
+    "${LOCAL_PROJECT}/models/simple_pond_catchment.ohq" \
+    > /tmp/simple_pond_catchment_ec2.ohq
+
+log "Transferring patched model script..."
 eval "${SCP_CMD} \
-    \"${LOCAL_PROJECT}/models/simple_pond_catchment.ohq\" \
-    ${EC2_USER}@${EC2_HOST}:/home/ubuntu/drywelldt/models/"
+    /tmp/simple_pond_catchment_ec2.ohq \
+    ${EC2_USER}@${EC2_HOST}:/home/ubuntu/drywelldt/models/simple_pond_catchment.ohq"
 
 # =============================================================================
 # Step 8 — Transfer viewer files
@@ -231,13 +249,24 @@ eval "${SCP_CMD} \
     ${EC2_USER}@${EC2_HOST}:${EC2_WWW}/"
 
 # =============================================================================
-# Step 9 — Set permissions
+# Step 9 — Set permissions and configure nginx to serve /outputs/
 # =============================================================================
-log "Setting permissions..."
+log "Setting permissions and configuring nginx..."
 eval "${SSH_CMD}" << 'ENDSSH'
 chmod +x /home/ubuntu/drywelldt/bin/DryWellDT
 chmod +x /home/ubuntu/drywelldt/bin/run_drywelldt.sh
 chmod -R o+rx /home/ubuntu/drywelldt/outputs
+
+# FIX 5: Ensure nginx serves /outputs/ from the correct directory
+# Add location block only if it doesn't already exist
+if ! sudo grep -q "location /outputs/" /etc/nginx/sites-enabled/drywelldt 2>/dev/null; then
+    sudo sed -i '/^}/i\    location \/outputs\/ {\n        alias \/home\/ubuntu\/drywelldt\/outputs\/;\n        add_header Cross-Origin-Opener-Policy same-origin always;\n        add_header Cross-Origin-Embedder-Policy require-corp always;\n    }' \
+        /etc/nginx/sites-enabled/drywelldt
+    sudo nginx -t && sudo systemctl reload nginx
+    echo "[deploy] nginx /outputs/ location added and reloaded"
+else
+    echo "[deploy] nginx /outputs/ location already present"
+fi
 ENDSSH
 
 # =============================================================================
@@ -281,7 +310,7 @@ log ""
 log "Viewer:  http://34.221.236.134:8081/DrywellDTViewer.html"
 log "Outputs: http://34.221.236.134:8081/outputs/"
 log ""
-log "To check runner logs on EC2:"
+log "To watch runner logs live on EC2:"
 log "  ssh -i \"${PEM_FILE}\" ubuntu@${EC2_HOST}"
-log "  journalctl -u drywelldt -f"
+log "  sudo journalctl -u drywelldt -f"
 log "=================================================="
