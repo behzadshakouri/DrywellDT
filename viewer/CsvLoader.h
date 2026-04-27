@@ -9,29 +9,35 @@
 #include <QList>
 #include <limits>
 
-// One (t, value) pair from the CSV, converted to wall-clock.
-//   x  : QDateTime::toMSecsSinceEpoch  (from OHQ day-serial)
-//   y  : value as read from CSV
+// One parsed time series from selected_output.csv.
+// Each CSV series is stored as interleaved (time, value) column pairs:
+//   column 2*i     -> OHQ day-serial time
+//   column 2*i + 1 -> observed/forecast value
+//
+// points.x : milliseconds since Unix epoch, converted from OHQ day-serial
+// points.y : value read from CSV
 struct CsvSeries
 {
     QString        name;
     QList<QPointF> points;
+
     double yMin =  std::numeric_limits<double>::infinity();
     double yMax = -std::numeric_limits<double>::infinity();
     qint64 xMin =  std::numeric_limits<qint64>::max();
     qint64 xMax =  std::numeric_limits<qint64>::min();
 };
 
-// Fetches the selected_output.csv from a URL and parses interleaved
+// Fetches selected_output.csv from a URL and parses interleaved
 // (t, value) column pairs into CsvSeries objects.
 class CsvLoader : public QObject
 {
     Q_OBJECT
+
 public:
     explicit CsvLoader(QObject *parent = nullptr);
 
-    // Fires off an async GET. A cache-busting query param is appended
-    // so repeated fetches do not return a stale browser cache entry.
+    // Starts an async GET. A cache-busting query parameter is appended so
+    // repeated refreshes do not return stale browser/proxy data.
     void fetch(const QUrl &url);
 
 signals:

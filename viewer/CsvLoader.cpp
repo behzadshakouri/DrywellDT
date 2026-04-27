@@ -1,32 +1,62 @@
 #include "CsvLoader.h"
 #include "OhqTime.h"
+
+#include <QDateTime>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QDateTime>
 #include <QRegularExpression>
-#include <QUrlQuery>
 #include <QStringList>
+#include <QUrlQuery>
+#include <QtGlobal>
 
-CsvLoader::CsvLoader(QObject *parent) : QObject(parent) {}
+CsvLoader::CsvLoader(QObject *parent)
+    : QObject(parent)
+{}
+
+static QNetworkRequest noCacheRequest(QUrl url)
+{
+    QUrlQuery q(url);
+    q.addQueryItem(QStringLiteral("_t"),
+                   QString::number(QDateTime::currentMSecsSinceEpoch()));
+    url.setQuery(q);
+
+    QNetworkRequest req(url);
+    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
+                     QNetworkRequest::AlwaysNetwork);
+    return req;
+}
+
+static void normalizeBounds(CsvSeries &s)
+{
+    if (s.points.isEmpty()) {
+        s.yMin = 0.0;
+        s.yMax = 1.0;
+        s.xMin = 0;
+        s.xMax = 1;
+        return;
+    }
+
+    // Pad flat y-ranges so the axis is visible instead of a hairline.
+    if (s.yMin == s.yMax) {
+        s.yMin -= 1.0;
+        s.yMax += 1.0;
+    }
+}
 
 void CsvLoader::fetch(const QUrl &url)
 {
-    QUrl u = url;
-    QUrlQuery q(u);
-    q.addQueryItem(QStringLiteral("_t"),
-                   QString::number(QDateTime::currentMSecsSinceEpoch()));
-    u.setQuery(q);
+    if (!url.isValid() || url.isEmpty()) {
+        emit failed(QStringLiteral("CSV URL is empty or invalid"));
+        return;
+    }
 
-    QNetworkRequest req(u);
-    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
-                     QNetworkRequest::AlwaysNetwork);
-
-    QNetworkReply *reply = m_nam.get(req);
+    QNetworkReply *reply = m_nam.get(noCacheRequest(url));
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        if (reply->error() != QNetworkReply::NoError)
+        if (reply->error() != QNetworkReply::NoError) {
             emit failed(reply->errorString());
-        else
+        } else {
             parse(reply->readAll());
+        }
         reply->deleteLater();
     });
 }
@@ -36,7 +66,11 @@ void CsvLoader::parse(const QByteArray &data)
     const QString text = QString::fromUtf8(data);
     const QStringList lines = text.split(QRegularExpression("[\r\n]+"),
                                          Qt::SkipEmptyParts);
-    if (lines.size() < 2) { emit failed("CSV has fewer than 2 lines"); return; }
+
+    if (lines.size() < 2) {
+        emit failed(QStringLiteral("CSV has fewer than 2 lines"));
+        return;
+    }
 
     const QStringList headerCols = lines[0].split(',');
     if (headerCols.size() < 2 || headerCols.size() % 2 != 0) {
@@ -44,20 +78,32 @@ void CsvLoader::parse(const QByteArray &data)
                             "(t, value pairs)").arg(headerCols.size()));
         return;
     }
-    const int seriesCount = headerCols.size() / 2;
 
+    const int seriesCount = headerCols.size() / 2;
     QVector<CsvSeries> series(seriesCount);
-    for (int i = 0; i < seriesCount; ++i)
-        series[i].name = headerCols[2 * i + 1].trimmed();
+
+    for (int i = 0; i < seriesCount; ++i) {
+        const QString name = headerCols[2 * i + 1].trimmed();
+        series[i].name = name.isEmpty()
+                         ? QStringLiteral("Series %1").arg(i + 1)
+                         : name;
+    }
 
     for (int row = 1; row < lines.size(); ++row) {
         const QStringList cols = lines[row].split(',');
-        if (cols.size() < seriesCount * 2) continue;
+        if (cols.size() < seriesCount * 2)
+            continue;
+
         for (int i = 0; i < seriesCount; ++i) {
-            bool okT = false, okV = false;
+            bool okT = false;
+            bool okV = false;
+
             const double t = cols[2 * i].trimmed().toDouble(&okT);
             const double v = cols[2 * i + 1].trimmed().toDouble(&okV);
-            if (!okT || !okV) continue;
+
+            if (!okT || !okV)
+                continue;
+
             const qint64 xMs = ohqSerialToMsEpoch(t);
             series[i].points.append(QPointF(static_cast<qreal>(xMs), v));
             series[i].yMin = qMin(series[i].yMin, v);
@@ -67,10 +113,8 @@ void CsvLoader::parse(const QByteArray &data)
         }
     }
 
-    // Pad flat y-ranges so the axis isn't a hairline
-    for (auto &s : series) {
-        if (s.yMin == s.yMax) { s.yMin -= 1.0; s.yMax += 1.0; }
-    }
+    for (auto &s : series)
+        normalizeBounds(s);
 
     emit loaded(series);
 }

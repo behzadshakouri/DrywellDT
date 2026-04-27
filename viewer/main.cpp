@@ -5,7 +5,7 @@
 #include <QStyleFactory>
 
 // Modern light theme — Fusion base + QSS overlay.
-// Kept inline here (small enough) so the whole app style lives in one place.
+// Kept inline here so the viewer's visual style stays in one place.
 static const char *kAppStyleSheet = R"QSS(
     QWidget {
         font-family: "Inter", "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -17,7 +17,6 @@ static const char *kAppStyleSheet = R"QSS(
     }
     QScrollArea { border: none; }
 
-    /* Header block */
     QLabel#HeaderTitle {
         color: #1E2A38;
         font-size: 20px;
@@ -28,15 +27,16 @@ static const char *kAppStyleSheet = R"QSS(
         font-size: 12px;
     }
 
-    /* Top-bar card */
     QFrame#TopBarCard {
         background: #FFFFFF;
         border: 1px solid #E1E5EB;
         border-radius: 10px;
     }
-    QFrame#TopBarCard QLabel { color: #6B7684; font-weight: 500; }
+    QFrame#TopBarCard QLabel {
+        color: #6B7684;
+        font-weight: 500;
+    }
 
-    /* Inputs */
     QLineEdit, QSpinBox {
         background: #FFFFFF;
         border: 1px solid #D7DDE4;
@@ -46,10 +46,13 @@ static const char *kAppStyleSheet = R"QSS(
         selection-color: #FFFFFF;
         min-height: 22px;
     }
-    QLineEdit:focus, QSpinBox:focus { border: 1px solid #2D7FF9; }
-    QSpinBox::up-button, QSpinBox::down-button { width: 16px; }
+    QLineEdit:focus, QSpinBox:focus {
+        border: 1px solid #2D7FF9;
+    }
+    QSpinBox::up-button, QSpinBox::down-button {
+        width: 16px;
+    }
 
-    /* Primary button */
     QPushButton {
         background: #2D7FF9;
         color: #FFFFFF;
@@ -58,23 +61,34 @@ static const char *kAppStyleSheet = R"QSS(
         padding: 8px 18px;
         font-weight: 600;
     }
-    QPushButton:hover  { background: #1E6CE0; }
-    QPushButton:pressed{ background: #1758BC; }
-    QPushButton:disabled { background: #B8C3D0; color: #FFFFFF; }
+    QPushButton:hover {
+        background: #1E6CE0;
+    }
+    QPushButton:pressed {
+        background: #1758BC;
+    }
+    QPushButton:disabled {
+        background: #B8C3D0;
+        color: #FFFFFF;
+    }
 
-    /* Status line */
-    QLabel#StatusLabel { color: #6B7684; font-size: 12px; padding: 2px 4px; }
+    QLabel#StatusLabel {
+        color: #6B7684;
+        font-size: 12px;
+        padding: 2px 4px;
+    }
 )QSS";
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    // Fusion renders consistently everywhere incl. wasm.
+    // Fusion renders consistently across desktop and Qt/WASM builds.
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     app.setStyleSheet(QString::fromUtf8(kAppStyleSheet));
 
     MainWindow w;
     w.show();
+
     return app.exec();
 }

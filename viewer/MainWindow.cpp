@@ -8,6 +8,8 @@
 #include <QBrush>
 #include <QButtonGroup>
 #include <QColor>
+#include <QCoreApplication>
+#include <QDebug>
 #include <QCursor>
 #include <QDateTime>
 #include <QFont>
@@ -16,6 +18,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPainter>
+#include <QNetworkRequest>
 #include <QPen>
 #include <QPushButton>
 #include <QScrollArea>
@@ -27,8 +30,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSplitter>
+#include <QSizePolicy>
 #include <QSvgWidget>
 #include <limits>
+#include <string>
 
 #include <QtCharts/QChart>
 #include <QtCharts/QChartView>
@@ -53,6 +58,31 @@ static QString statusHtml(const QString &color, const QString &text)
 {
     return QString("<span style='color:%1; font-size:14px;'>&#9679;</span>"
                    " <span>%2</span>").arg(color, text.toHtmlEscaped());
+}
+
+
+// Build a no-cache request for all live viewer assets (CSV, SVG, JSON).
+// This avoids stale nginx/browser/WASM cache results during repeated refreshes.
+static QNetworkRequest noCacheRequest(QUrl url)
+{
+    QUrlQuery q(url);
+    q.addQueryItem(QStringLiteral("_t"),
+                   QString::number(QDateTime::currentMSecsSinceEpoch()));
+    url.setQuery(q);
+
+    QNetworkRequest req(url);
+    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
+                     QNetworkRequest::AlwaysNetwork);
+    return req;
+}
+
+// Resolve a URL string against config.json's URL. Absolute URLs remain
+// unchanged; relative paths such as "viz.svg" become siblings of config.json.
+static QUrl resolvedConfigUrl(const QUrl &configUrl, const QString &value)
+{
+    if (value.trimmed().isEmpty())
+        return {};
+    return configUrl.resolved(QUrl(value.trimmed()));
 }
 
 // Default CSV location when served by nginx locally, alongside the wasm.
@@ -241,19 +271,8 @@ void MainWindow::loadConfig()
         QCoreApplication::applicationDirPath() + "/config.json");
 #endif
 
-    // Cache-bust: Browsers (especially in WASM contexts) aggressively cache
-    // config.json, so changes to the deployed config don't propagate even on
-    // hard-refresh. Append a timestamp query parameter and force AlwaysNetwork.
-    QUrl bustedUrl = configUrl;
-    QUrlQuery q(bustedUrl);
-    q.addQueryItem(QStringLiteral("_t"),
-                   QString::number(QDateTime::currentMSecsSinceEpoch()));
-    bustedUrl.setQuery(q);
-
-    QNetworkRequest req(bustedUrl);
-    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
-                     QNetworkRequest::AlwaysNetwork);
-    QNetworkReply *reply = m_configNam.get(req);
+    // Cache-bust config.json so deployment edits are picked up immediately.
+    QNetworkReply *reply = m_configNam.get(noCacheRequest(configUrl));
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onConfigReply(reply);
     });
@@ -261,35 +280,54 @@ void MainWindow::loadConfig()
 
 void MainWindow::onConfigReply(QNetworkReply *reply)
 {
-    reply->deleteLater();
+    const QUrl configUrl = reply->url();
+
     if (reply->error() == QNetworkReply::NoError) {
+        QJsonParseError parseError;
         const QByteArray data = reply->readAll();
-        const QJsonDocument doc = QJsonDocument::fromJson(data);
-        const QJsonObject obj = doc.object();
+        const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
 
-        const QString csv  = obj.value("csv_url").toString();
-        if (!csv.isEmpty()) m_url = QUrl(csv);
+        if (!doc.isObject()) {
+            qDebug() << "Config parse error:" << parseError.errorString();
+            m_statusLabel->setText(statusHtml("#EF4444",
+                                               "Config parse error: " + parseError.errorString()));
+        } else {
+            const QJsonObject obj = doc.object();
 
-        const QString viz  = obj.value("viz_url").toString();
-        if (!viz.isEmpty()) m_vizUrl = QUrl(viz);
+            const QString csv = obj.value("csv_url").toString();
+            if (!csv.isEmpty())
+                m_url = resolvedConfigUrl(configUrl, csv);
 
-        const QString vizS = obj.value("viz_state_url").toString();
-        if (!vizS.isEmpty()) m_vizStateUrl = QUrl(vizS);
+            const QString viz = obj.value("viz_url").toString();
+            if (!viz.isEmpty())
+                m_vizUrl = resolvedConfigUrl(configUrl, viz);
 
-        const QString fviz  = obj.value("forecast_viz_url").toString();
-        if (!fviz.isEmpty()) m_forecastVizUrl = QUrl(fviz);
+            const QString vizS = obj.value("viz_state_url").toString();
+            if (!vizS.isEmpty())
+                m_vizStateUrl = resolvedConfigUrl(configUrl, vizS);
 
-        const QString fvizS = obj.value("forecast_viz_state_url").toString();
-        if (!fvizS.isEmpty()) m_forecastVizStateUrl = QUrl(fvizS);
+            const QString fviz = obj.value("forecast_viz_url").toString();
+            if (!fviz.isEmpty())
+                m_forecastVizUrl = resolvedConfigUrl(configUrl, fviz);
 
-        qDebug() << "Config: csv="          << m_url
-                 << "viz="                  << m_vizUrl
-                 << "viz_state="            << m_vizStateUrl
-                 << "forecast_viz="         << m_forecastVizUrl
-                 << "forecast_viz_state="   << m_forecastVizStateUrl;
+            const QString fvizS = obj.value("forecast_viz_state_url").toString();
+            if (!fvizS.isEmpty())
+                m_forecastVizStateUrl = resolvedConfigUrl(configUrl, fvizS);
+
+            qDebug() << "Config: csv="          << m_url
+                     << "viz="                  << m_vizUrl
+                     << "viz_state="            << m_vizStateUrl
+                     << "forecast_viz="         << m_forecastVizUrl
+                     << "forecast_viz_state="   << m_forecastVizStateUrl;
+        }
     } else {
         qDebug() << "Config load error:" << reply->error() << reply->errorString();
+        m_statusLabel->setText(statusHtml("#EF4444",
+                                           "Config load error: " + reply->errorString()));
     }
+
+    reply->deleteLater();
+
     m_timer.start();
     onRefreshClicked();
 }
@@ -301,22 +339,22 @@ void MainWindow::onRefreshClicked()
 
     // Current SVG
     if (!m_vizUrl.isEmpty()) {
-        QNetworkReply *r = m_svgNam.get(QNetworkRequest(m_vizUrl));
+        QNetworkReply *r = m_svgNam.get(noCacheRequest(m_vizUrl));
         connect(r, &QNetworkReply::finished, this, [this, r]() { onSvgFetched(r); });
     }
     // Forecast SVG
     if (!m_forecastVizUrl.isEmpty()) {
-        QNetworkReply *r = m_forecastSvgNam.get(QNetworkRequest(m_forecastVizUrl));
+        QNetworkReply *r = m_forecastSvgNam.get(noCacheRequest(m_forecastVizUrl));
         connect(r, &QNetworkReply::finished, this, [this, r]() { onForecastSvgFetched(r); });
     }
     // Current viz state JSON (for the boundary timestamp)
     if (!m_vizStateUrl.isEmpty()) {
-        QNetworkReply *r = m_vizStateNam.get(QNetworkRequest(m_vizStateUrl));
+        QNetworkReply *r = m_vizStateNam.get(noCacheRequest(m_vizStateUrl));
         connect(r, &QNetworkReply::finished, this, [this, r]() { onVizStateFetched(r); });
     }
     // Forecast viz state JSON (for the forecast-end timestamp)
     if (!m_forecastVizStateUrl.isEmpty()) {
-        QNetworkReply *r = m_forecastVizStateNam.get(QNetworkRequest(m_forecastVizStateUrl));
+        QNetworkReply *r = m_forecastVizStateNam.get(noCacheRequest(m_forecastVizStateUrl));
         connect(r, &QNetworkReply::finished, this, [this, r]() { onForecastVizStateFetched(r); });
     }
 }
@@ -375,13 +413,26 @@ void MainWindow::recomputeBounds(CsvSeries &s)
     s.yMax = -std::numeric_limits<double>::infinity();
     s.xMin =  std::numeric_limits<qint64>::max();
     s.xMax =  std::numeric_limits<qint64>::min();
+
     for (const auto &p : s.points) {
         s.yMin = qMin(s.yMin, p.y());
         s.yMax = qMax(s.yMax, p.y());
         s.xMin = qMin(s.xMin, qint64(p.x()));
         s.xMax = qMax(s.xMax, qint64(p.x()));
     }
-    if (s.yMin == s.yMax) { s.yMin -= 1.0; s.yMax += 1.0; }
+
+    if (s.points.isEmpty()) {
+        s.yMin = 0.0;
+        s.yMax = 1.0;
+        s.xMin = 0;
+        s.xMax = 1;
+        return;
+    }
+
+    if (s.yMin == s.yMax) {
+        s.yMin -= 1.0;
+        s.yMax += 1.0;
+    }
 }
 
 void MainWindow::onSeriesHovered(const QPointF &point, bool state)
