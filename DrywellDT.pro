@@ -6,6 +6,59 @@ CONFIG -= app_bundle
 
 CONFIG += c++14
 
+# ============================================================
+# Host-config (enable ONE only)
+# Default here: PowerEdge
+# ============================================================
+#CONFIG  += Behzad
+#DEFINES += Behzad
+
+CONFIG  += PowerEdge
+DEFINES += PowerEdge
+
+#CONFIG  += Arash
+#DEFINES += Arash
+
+#CONFIG  += SligoCreek
+#DEFINES += SligoCreek
+
+#CONFIG  += Jason
+#DEFINES += Jason
+
+#CONFIG  += WSL
+#DEFINES += WSL
+
+# ============================================================
+# Host build folders (keeps build artifacts out of the source tree)
+# ============================================================
+BUILD_TAG = unknown
+
+contains(DEFINES, Jason)      { BUILD_TAG = jason }
+contains(DEFINES, PowerEdge)  { BUILD_TAG = poweredge }
+contains(DEFINES, Behzad)     { BUILD_TAG = behzad }
+contains(DEFINES, Arash)      { BUILD_TAG = arash }
+contains(DEFINES, SligoCreek) { BUILD_TAG = sligocreek }
+contains(DEFINES, WSL)        { BUILD_TAG = wsl }
+
+BUILD_DIR = $$PWD/build-qmake-$$BUILD_TAG
+
+!exists($$BUILD_DIR)     { system(mkdir -p $$BUILD_DIR) }
+!exists($$BUILD_DIR/obj) { system(mkdir -p $$BUILD_DIR/obj) }
+!exists($$BUILD_DIR/moc) { system(mkdir -p $$BUILD_DIR/moc) }
+!exists($$BUILD_DIR/rcc) { system(mkdir -p $$BUILD_DIR/rcc) }
+!exists($$BUILD_DIR/ui)  { system(mkdir -p $$BUILD_DIR/ui) }
+!exists($$BUILD_DIR/bin) { system(mkdir -p $$BUILD_DIR/bin) }
+
+OBJECTS_DIR = $$BUILD_DIR/obj
+MOC_DIR     = $$BUILD_DIR/moc
+RCC_DIR     = $$BUILD_DIR/rcc
+UI_DIR      = $$BUILD_DIR/ui
+DESTDIR     = $$BUILD_DIR/bin
+
+message("BUILD_TAG   = $$BUILD_TAG")
+message("BUILD_DIR   = $$BUILD_DIR")
+message("DESTDIR     = $$DESTDIR")
+
 # Set to 1 to compile OHQ from source, 0 to use the shared library
 OHQ_FROM_SOURCE = 1
 
@@ -23,12 +76,12 @@ win32: DEFINES += windows_version
 DEFINES += Terminal_version
 DEFINES += Q_JSON_SUPPORT
 
-TARGET = DryWellDT
+TARGET = DryWellDT_$$BUILD_TAG
 TEMPLATE = app
 win32:QMAKE_CXXFLAGS += /MP
 
 # ── OHQ: source vs library ───────────────────────────────────────
-equals(OHQ_FROM_SOURCE, 0) {
+equals(OHQ_FROM_SOURCE, 1) {
     message(Building with OHQ source files)
     SOURCES += \
         ../OpenHydroQual/aquifolium/src/Block.cpp \
@@ -169,6 +222,7 @@ HEADERS += \
     ../OpenHydroQual/aquifolium/include/reaction.h \
     DTConfig.h \
     DTRunner.h \
+    RuntimeFiles.h \
     VizRenderer.h \
     noaaweatherfetcher.h
 
@@ -176,3 +230,13 @@ HEADERS += \
 qnx: target.path = /tmp/$${TARGET}/bin
 else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
+
+
+DISTFILES += \
+    config.json \
+    viz.json
+
+# Copy runtime JSON files next to the executable after every successful link.
+# This keeps build-qmake-<host>/bin self-contained and refreshes edited JSON.
+QMAKE_POST_LINK += $$QMAKE_COPY $$shell_quote($$PWD/config.json) $$shell_quote($$DESTDIR/config.json) $$escape_expand(\n\t)
+QMAKE_POST_LINK += $$QMAKE_COPY $$shell_quote($$PWD/viz.json)    $$shell_quote($$DESTDIR/viz.json)    $$escape_expand(\n\t)

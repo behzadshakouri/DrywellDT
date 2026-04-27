@@ -68,3 +68,9 @@ libs/release/
 build/Desktop_Qt_6_8_3-Release/
 
 viewer/build/debug/
+
+build-qmake-poweredge/bin/
+
+build-qmake-poweredge/moc/
+
+build-qmake-poweredge/obj/

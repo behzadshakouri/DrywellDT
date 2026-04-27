@@ -1,9 +1,11 @@
 #pragma once
 
-#include <QString>
 #include <QJsonObject>
-#include <vector>
+#include <QString>
+#include <QtGlobal>
+
 #include <string>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // StateVarExport
@@ -18,7 +20,10 @@ struct StateVarExport
 // ---------------------------------------------------------------------------
 // DTConfig
 // Loads and validates config.json from next to the binary.
-// All paths are stored as std::string so they can be passed straight to OHQ.
+//
+// Paths may be machine-based in config.json using ${project_root}; DTConfig.cpp
+// expands those values from the selected machine profile before passing them to
+// OHQ. All final paths are stored as std::string for direct OHQ use.
 // ---------------------------------------------------------------------------
 class DTConfig
 {
@@ -28,43 +33,43 @@ public:
     bool load(QString &errorMessage);
 
     // --- paths ---
-    std::string scriptFile;        // .ohq script (used on cold start if loadModelJson is empty)
+    std::string scriptFile;        // .ohq script used on cold start if loadModelJson is empty
     std::string loadModelJson;     // optional: force cold-start from this model JSON instead of script
     std::string stateDir;          // directory for timestamped state snapshots
-    std::string outputDir;         // directory for simulation output files (nginx-served)
+    std::string outputDir;         // directory for simulation output files / nginx-served outputs
     std::string modelSnapshotDir;  // directory for per-interval model JSON snapshots
     std::string weatherFile;       // optional weather JSON
 
-    // --- weather / NOAA ---
-    std::string weatherSource  = "openmeteo"; // "noaa" or "openmeteo"
-    double      latitude       = 0.0;
-    double      longitude      = 0.0;
+    // --- weather / NOAA / Open-Meteo ---
+    std::string weatherSource = "openmeteo"; // "noaa" or "openmeteo"
+    double      latitude      = 0.0;
+    double      longitude     = 0.0;
     std::string noaaOffice;        // e.g. "LWX"
     int         noaaGridX = 0;
     int         noaaGridY = 0;
 
     // --- timing ---
-    // "300s" | "4hr" | "2day"  — parsed into intervalMs for QTimer
+    // Accepted syntax: "300s", "15min", "4hr", "1day".
     std::string intervalStr;
-    qint64      intervalMs  = 86400000; // default: 1 day
-    // Optional fixed start datetime (ISO 8601). Empty = use current time.
+    qint64      intervalMs = 86400000; // default: 1 day
+
+    // Optional fixed start datetime (ISO 8601). Empty = use current time / snapshot.
     std::string startDatetime;
 
     // --- forecast horizon ---
-    // Optional duration of the Stage B forecast window beyond the advance interval.
-    // Same syntax as intervalStr ("6day", "12hr", etc.).
-    // Empty / 0 = forecast disabled (Stage B is skipped).
+    // Optional duration of Stage B forecast window beyond the advance interval.
+    // Same syntax as intervalStr. Empty / 0 = forecast disabled.
     std::string forecastHorizonStr;
     qint64      forecastHorizonMs = 0;
 
     // --- state variable exports ---
     std::vector<StateVarExport> stateVarExports;
 
-    // Raw JSON object (kept for forward-compatibility; callers may inspect it)
+    // Raw JSON object kept for forward compatibility / optional inspection.
     QJsonObject raw;
 
 private:
-    // Parse "300s", "4hr", "2day" → milliseconds.
-    // Returns -1 on parse error.
-    static qint64 parseIntervalMs(const std::string &s, QString &err); // "300s","4hr","2day" → ms
+    // Parse "300s", "15min", "4hr", "1day" -> milliseconds.
+    // Returns -1 on parse error and writes details into err.
+    static qint64 parseIntervalMs(const std::string &s, QString &err);
 };

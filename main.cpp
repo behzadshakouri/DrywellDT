@@ -2,6 +2,7 @@
  * OpenHydroQual Digital Twin — generic OHQ model runner
  *
  * main.cpp is intentionally thin:
+ *   - Ensure runtime JSON files are available next to the binary
  *   - Load config
  *   - Initialise runner
  *   - Fire an immediate first run, then arm QTimer for subsequent intervals
@@ -10,18 +11,46 @@
 
 #include "DTConfig.h"
 #include "DTRunner.h"
+#include "RuntimeFiles.h"
+#include "System.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QStringList>
 #include <QTimer>
+
+#include <algorithm>
+#include <climits>
 #include <iostream>
-#include "System.h"
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
 
     // ------------------------------------------------------------------
-    // 1. Load config.json from next to the binary
+    // 1. Ensure config.json and viz.json are available next to the binary
+    // ------------------------------------------------------------------
+    // With DESTDIR = build-qmake-<host>/bin, ../../ points back to the
+    // project root. The runtime/config folders are optional extra locations.
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString projectRoot = QDir(appDir).absoluteFilePath("../../");
+
+    QStringList runtimeSearchDirs;
+    runtimeSearchDirs << appDir;
+    runtimeSearchDirs << projectRoot;
+    runtimeSearchDirs << QDir(projectRoot).absoluteFilePath("runtime");
+    runtimeSearchDirs << QDir(projectRoot).absoluteFilePath("config");
+
+    if (!ensureRuntimeFile("config.json", runtimeSearchDirs))
+        return 1;
+
+    // viz.json is required for SVG rendering. Keep this non-fatal so the
+    // solver can still run and write numeric outputs if visualization is not
+    // configured yet.
+    ensureRuntimeFile("viz.json", runtimeSearchDirs);
+
+    // ------------------------------------------------------------------
+    // 2. Load config.json from next to the binary
     // ------------------------------------------------------------------
     DTConfig config;
     QString configError;
@@ -33,7 +62,7 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------------------------------------------------
-    // 2. Initialise runner
+    // 3. Initialise runner
     // ------------------------------------------------------------------
     DTRunner runner(config);
     QString initError;
@@ -45,11 +74,11 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------------------------------------------------
-    // 3. Run the first interval immediately (at start-up)
+    // 4. Run the first interval immediately at start-up
     // ------------------------------------------------------------------
-    // Use a single-shot zero-delay timer so the event loop is running
-    // before the first solve begins (keeps the door open for signals/slots
-    // and the future Crow API to be wired in before any blocking work).
+    // Use a single-shot zero-delay timer so the event loop is running before
+    // the first solve begins. This keeps the door open for signals/slots and
+    // the future Crow API to be wired in before any blocking work.
     QTimer::singleShot(0, &runner, [&runner]() {
         if (!runner.runOnce())
         {
@@ -59,20 +88,24 @@ int main(int argc, char *argv[])
     });
 
     // ------------------------------------------------------------------
-    // 4. Arm the recurring timer for subsequent intervals
+    // 5. Arm the recurring timer for subsequent intervals
     // ------------------------------------------------------------------
     QTimer intervalTimer;
-    intervalTimer.setInterval(static_cast<int>(
-        std::min(config.intervalMs, static_cast<qint64>(INT_MAX))));
+
+    const qint64 safeIntervalMs =
+        std::min(config.intervalMs, static_cast<qint64>(INT_MAX));
+
+    intervalTimer.setInterval(static_cast<int>(safeIntervalMs));
 
     QObject::connect(&intervalTimer, &QTimer::timeout,
                      &runner, [&runner]() {
                          if (!runner.runOnce())
                          {
                              std::cerr << "[Main] Periodic run failed. Continuing to next interval.\n";
-                             // Non-fatal: log and wait for the next tick
+                             // Non-fatal: log and wait for the next tick.
                          }
                      });
+
     intervalTimer.start();
 
     std::cout << "[Main] OHQ Digital Twin running. Interval: "
@@ -80,7 +113,7 @@ int main(int argc, char *argv[])
               << "[Main] Press Ctrl+C to stop.\n";
 
     // ------------------------------------------------------------------
-    // 5. TODO: wire in Crow HTTP API here before app.exec()
+    // 6. TODO: wire in Crow HTTP API here before app.exec()
     // ------------------------------------------------------------------
 
     return app.exec();

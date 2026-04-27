@@ -6,6 +6,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+#include <cctype>
 #include <iostream>
 
 // ---------------------------------------------------------------------------
@@ -21,50 +23,102 @@ static QString requireString(const QJsonObject &obj, const char *key, bool &ok)
     return obj[key].toString();
 }
 
+// Expand ${var} tokens using the selected machine profile.
+// Example:
+//   ${project_root}/outputs  ->  /mnt/3rd900/Projects/DrywellDT/outputs
+static QString expandVars(QString s, const QJsonObject &vars)
+{
+    for (auto it = vars.constBegin(); it != vars.constEnd(); ++it)
+        s.replace("${" + it.key() + "}", it.value().toString());
+    return s;
+}
+
+// Return true if a path-like string still contains an unresolved ${...} token.
+static bool hasUnresolvedVar(const QString &s)
+{
+    return s.contains("${") && s.contains("}");
+}
+
+// Machine name compiled from qmake DEFINES.
+// If config.json leaves "machine" empty, this value is used automatically.
+static QString compiledMachineName()
+{
+#ifdef PowerEdge
+    return "PowerEdge";
+#elif defined(Jason)
+    return "Jason";
+#elif defined(Behzad)
+    return "Behzad";
+#elif defined(Arash)
+    return "Arash";
+#elif defined(SligoCreek)
+    return "SligoCreek";
+#elif defined(WSL)
+    return "WSL";
+#else
+    return {};
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // DTConfig::parseIntervalMs
-// Accepts: <integer><unit>   where unit ∈ { s, min, hr, day }
+// Accepts: <number><unit>, where unit is one of: s, min, hr, day
+// Examples: 300s, 15min, 4hr, 1day, 0.5day
 // ---------------------------------------------------------------------------
 qint64 DTConfig::parseIntervalMs(const std::string &s, QString &err)
 {
-    if (s.empty())
+    const QString raw = QString::fromStdString(s).trimmed();
+    const std::string trimmed = raw.toStdString();
+
+    if (trimmed.empty())
     {
         err = "interval string is empty";
         return -1;
     }
 
-    // find where digits end
     size_t i = 0;
-    while (i < s.size() && (std::isdigit(s[i]) || s[i] == '.'))
+    while (i < trimmed.size() &&
+           (std::isdigit(static_cast<unsigned char>(trimmed[i])) || trimmed[i] == '.'))
         ++i;
 
     if (i == 0)
     {
-        err = QString("interval '%1' has no leading number").arg(QString::fromStdString(s));
+        err = QString("interval '%1' has no leading number").arg(raw);
         return -1;
     }
 
-    const double value = std::stod(s.substr(0, i));
-    const std::string unit = s.substr(i);
+    double value = 0.0;
+    try
+    {
+        value = std::stod(trimmed.substr(0, i));
+    }
+    catch (...)
+    {
+        err = QString("invalid numeric value in interval '%1'").arg(raw);
+        return -1;
+    }
+
+    const std::string unit = trimmed.substr(i);
 
     qint64 multiplierMs = 0;
     if      (unit == "s")   multiplierMs = 1000LL;
-    else if (unit == "min") multiplierMs = 60LL   * 1000;
-    else if (unit == "hr")  multiplierMs = 3600LL * 1000;
-    else if (unit == "day") multiplierMs = 86400LL * 1000;
+    else if (unit == "min") multiplierMs = 60LL   * 1000LL;
+    else if (unit == "hr")  multiplierMs = 3600LL * 1000LL;
+    else if (unit == "day") multiplierMs = 86400LL * 1000LL;
     else
     {
         err = QString("unknown interval unit '%1' (use s, min, hr, day)")
-        .arg(QString::fromStdString(unit));
+              .arg(QString::fromStdString(unit));
         return -1;
     }
 
-    const qint64 result = static_cast<qint64>(value * multiplierMs);
+    const qint64 result = static_cast<qint64>(value * static_cast<double>(multiplierMs));
     if (result <= 0)
     {
-        err = QString("interval must be > 0, got '%1'").arg(QString::fromStdString(s));
+        err = QString("interval must be > 0, got '%1'").arg(raw);
         return -1;
     }
+
     return result;
 }
 
@@ -102,13 +156,34 @@ bool DTConfig::load(QString &errorMessage)
     }
 
     raw = doc.object();
+    stateVarExports.clear();
+
+    // -------------------------------------------------------------------
+    // Machine-based variable resolution
+    // -------------------------------------------------------------------
+    // Priority:
+    //   1. config.json "machine" value, if non-empty
+    //   2. compiled qmake define, e.g. DEFINES += PowerEdge
+    QString machine = raw.value("machine").toString().trimmed();
+    if (machine.isEmpty())
+        machine = compiledMachineName();
+
+    const QJsonObject machines = raw.value("machines").toObject();
+    const QJsonObject machineVars = machines.value(machine).toObject();
+
+    if (!machine.isEmpty() && machineVars.isEmpty())
+    {
+        errorMessage = "config.json machine profile not found: " + machine;
+        return false;
+    }
+
     bool ok = true;
 
-    // --- required fields ---
-    scriptFile       = requireString(raw, "script_file",       ok).toStdString();
-    stateDir         = requireString(raw, "state_dir",         ok).toStdString();
-    outputDir        = requireString(raw, "output_dir",        ok).toStdString();
-    modelSnapshotDir = requireString(raw, "model_snapshot_dir",ok).toStdString();
+    // --- required fields with ${...} expansion ---
+    const QString scriptFileQ = expandVars(requireString(raw, "script_file", ok), machineVars);
+    const QString stateDirQ   = expandVars(requireString(raw, "state_dir", ok), machineVars);
+    const QString outputDirQ  = expandVars(requireString(raw, "output_dir", ok), machineVars);
+    const QString snapDirQ    = expandVars(requireString(raw, "model_snapshot_dir", ok), machineVars);
 
     if (!ok)
     {
@@ -117,21 +192,36 @@ bool DTConfig::load(QString &errorMessage)
         return false;
     }
 
-    // --- optional fields ---
-    loadModelJson = raw.value("load_model_json").toString().toStdString();
-    weatherFile   = raw.value("weather_file").toString().toStdString();
+    if (hasUnresolvedVar(scriptFileQ) || hasUnresolvedVar(stateDirQ) ||
+        hasUnresolvedVar(outputDirQ)  || hasUnresolvedVar(snapDirQ))
+    {
+        errorMessage = "config.json contains unresolved path variable(s). "
+                       "Check machine/machines/project_root.";
+        return false;
+    }
+
+    scriptFile       = scriptFileQ.toStdString();
+    stateDir         = stateDirQ.toStdString();
+    outputDir        = outputDirQ.toStdString();
+    modelSnapshotDir = snapDirQ.toStdString();
+
+    // --- optional path fields with ${...} expansion ---
+    loadModelJson = expandVars(raw.value("load_model_json").toString(), machineVars).toStdString();
+    weatherFile   = expandVars(raw.value("weather_file").toString(), machineVars).toStdString();
+
+    // --- weather ---
     noaaOffice    = raw.value("noaa_office").toString("LWX").toStdString();
     noaaGridX     = raw.value("noaa_grid_x").toInt(0);
     noaaGridY     = raw.value("noaa_grid_y").toInt(0);
-    weatherSource = raw.value("weather_source").toString("openmeteo").toStdString();
-    latitude  = raw.value("latitude").toDouble(0.0);
-    longitude = raw.value("longitude").toDouble(0.0);
+    weatherSource = raw.value("weather_source").toString("openmeteo").trimmed().toStdString();
+    latitude      = raw.value("latitude").toDouble(0.0);
+    longitude     = raw.value("longitude").toDouble(0.0);
 
-    startDatetime = raw.value("start_datetime").toString().toStdString();
-    intervalStr   = raw.value("interval").toString("1day").toStdString();
-    forecastHorizonStr = raw.value("forecast_horizon").toString().toStdString();
+    // --- timing ---
+    startDatetime      = raw.value("start_datetime").toString().trimmed().toStdString();
+    intervalStr        = raw.value("interval").toString("1day").trimmed().toStdString();
+    forecastHorizonStr = raw.value("forecast_horizon").toString().trimmed().toStdString();
 
-    // --- parse interval ---
     QString intervalErr;
     intervalMs = parseIntervalMs(intervalStr, intervalErr);
     if (intervalMs < 0)
@@ -140,7 +230,6 @@ bool DTConfig::load(QString &errorMessage)
         return false;
     }
 
-    // --- parse forecast horizon (optional) ---
     if (!forecastHorizonStr.empty())
     {
         QString horizonErr;
@@ -163,10 +252,23 @@ bool DTConfig::load(QString &errorMessage)
         for (const auto &entry : arr)
         {
             if (!entry.isObject()) continue;
+
             const QJsonObject obj = entry.toObject();
             StateVarExport exp;
-            exp.variable   = obj.value("variable").toString().toStdString();
-            exp.outputPath = obj.value("output_path").toString().toStdString();
+            exp.variable = obj.value("variable").toString().toStdString();
+
+            const QString expandedOutputPath =
+                expandVars(obj.value("output_path").toString(), machineVars);
+
+            if (hasUnresolvedVar(expandedOutputPath))
+            {
+                errorMessage = "config.json state_variables output_path contains "
+                               "unresolved path variable(s).";
+                return false;
+            }
+
+            exp.outputPath = expandedOutputPath.toStdString();
+
             if (!exp.variable.empty() && !exp.outputPath.empty())
                 stateVarExports.push_back(exp);
         }
@@ -179,22 +281,31 @@ bool DTConfig::load(QString &errorMessage)
             QDir().mkpath(QString::fromStdString(dir));
     }
 
-    std::cout << "[Config] script_file       : " << scriptFile       << "\n";
+    // --- logging ---
+    std::cout << "[Config] config.json       : " << configPath.toStdString() << "\n"
+              << "[Config] machine           : " << machine.toStdString() << "\n"
+              << "[Config] script_file       : " << scriptFile << "\n";
+
     if (!loadModelJson.empty())
-        std::cout << "[Config] load_model_json   : " << loadModelJson   << "\n";
-    std::cout << "[Config] state_dir         : " << stateDir         << "\n"
-              << "[Config] output_dir        : " << outputDir        << "\n"
+        std::cout << "[Config] load_model_json   : " << loadModelJson << "\n";
+
+    std::cout << "[Config] state_dir         : " << stateDir << "\n"
+              << "[Config] output_dir        : " << outputDir << "\n"
               << "[Config] model_snapshot_dir: " << modelSnapshotDir << "\n"
+              << "[Config] weather_source    : " << weatherSource << "\n"
+              << "[Config] latitude          : " << latitude << "\n"
+              << "[Config] longitude         : " << longitude << "\n"
+              << "[Config] noaa_office       : " << noaaOffice << "\n"
+              << "[Config] noaa_grid_x       : " << noaaGridX << "\n"
+              << "[Config] noaa_grid_y       : " << noaaGridY << "\n"
               << "[Config] interval          : " << intervalStr
               << " (" << intervalMs << " ms)\n";
+
     if (forecastHorizonMs > 0)
         std::cout << "[Config] forecast_horizon  : " << forecastHorizonStr
                   << " (" << forecastHorizonMs << " ms)\n";
     else
         std::cout << "[Config] forecast_horizon  : disabled\n";
-    std::cout << "[Config] noaa_office       : " << noaaOffice << "\n"
-              << "[Config] noaa_grid_x       : " << noaaGridX  << "\n"
-              << "[Config] noaa_grid_y       : " << noaaGridY  << "\n";
 
     if (!startDatetime.empty())
         std::cout << "[Config] start_datetime    : " << startDatetime << "\n";
