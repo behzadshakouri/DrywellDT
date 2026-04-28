@@ -22,12 +22,13 @@
         }
     },
 
-    "script_file": "${project_root}/models/simple_pond_catchment.ohq",
+    "script_file": "${project_root}/models/vn_drywell.ohq",
     "load_model_json": "",
     "state_dir": "${project_root}/state",
     "output_dir": "${project_root}/outputs",
     "model_snapshot_dir": "${project_root}/snapshots",
     "weather_file": "",
+    "viz_file": "${project_root}/viz_drywell.json",
 
     "weather_source": "openmeteo",
     "latitude": 38.91088,
@@ -42,7 +43,7 @@
 
     "state_variables": [
         {
-            "variable": "Pond:storage",
+            "variable": "Drywell:storage",
             "output_path": "${project_root}/outputs/drywell_storage.json"
         }
     ]

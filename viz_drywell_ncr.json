@@ -9,8 +9,8 @@
     {
       "id": "inflow_csv",
       "label": "Inflow CSV",
-      "x": 25,
-      "y": 35,
+      "x": 155,
+      "y": 15,
       "width": 125,
       "height": 45,
       "draw": [
@@ -53,9 +53,9 @@
       "label": "Well_c",
       "block": "Well_c",
       "x": 95,
-      "y": 115,
+      "y": 25,
       "width": 60,
-      "height": 120,
+      "height": 80,
       "fill_max": 10,
       "bind": {
         "fill_value": {
@@ -123,9 +123,9 @@
       "label": "Well_g",
       "block": "Well_g",
       "x": 95,
-      "y": 250,
+      "y": 120,
       "width": 60,
-      "height": 430,
+      "height": 230,
       "fill_max": 50,
       "bind": {
         "fill_value": {
@@ -193,9 +193,9 @@
       "label": "Junction",
       "block": "Junction_elastic",
       "x": 25,
-      "y": 250,
-      "width": 55,
-      "height": 55,
+      "y": 90,
+      "width": 35,
+      "height": 35,
       "fill_max": 1,
       "bind": {
         "fill_value": {
@@ -230,9 +230,9 @@
       "id": "groundwater",
       "label": "Ground Water",
       "block": "Ground Water",
-      "x": 165,
+      "x": 111,
       "y": 765,
-      "width": 690,
+      "width": 745,
       "height": 35,
       "fill_max": 100000,
       "bind": {
@@ -366,7 +366,7 @@
         "x": {
           "counter": "i",
           "range": [
-            160,
+            111,
             750
           ]
         },
