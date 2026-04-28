@@ -23,49 +23,73 @@
         }
     },
 
-    "models": {
-        "VN": {
-            "script_file": "${project_root}/models/vn_drywell.ohq",
-            "viz_file": "${project_root}/viz_drywell.json",
-            "state_dir": "${project_root}/state/${model_key}",
-            "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
-            "state_variables": [
-                {
-                    "variable": "Well_c:storage",
-                    "output_path": "${project_root}/outputs/vn_well_c_storage.json"
-                },
-                {
-                    "variable": "Well_g:storage",
-                    "output_path": "${project_root}/outputs/vn_well_g_storage.json"
-                }
-            ]
-        },
-        "Drywell": {
-            "script_file": "${project_root}/models/drywell.ohq",
-            "viz_file": "${project_root}/viz_drywell.json",
-            "state_dir": "${project_root}/state/${model_key}",
-            "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
-            "state_variables": [
-                {
-                    "variable": "Drywell:storage",
-                    "output_path": "${project_root}/outputs/drywell_storage.json"
-                }
-            ]
-        },
-        "HQ": {
-            "script_file": "${project_root}/models/hq_drywell.ohq",
-            "viz_file": "${project_root}/viz_hq.json",
-            "state_dir": "${project_root}/state/${model_key}",
-            "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
-            "state_variables": []
-        },
-        "R": {
-            "script_file": "${project_root}/models/rosemead.ohq",
-            "viz_file": "${project_root}/viz_r.json",
-            "state_dir": "${project_root}/state/${model_key}",
-            "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
-            "state_variables": []
-        }
+"models": {
+  "VN": {
+    "script_file": "${project_root}/models/vn_drywell.ohq",
+    "viz_file": "${project_root}/viz_drywell.json",
+    "state_dir": "${project_root}/state/${model_key}",
+    "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
+    "state_variables": [
+      {
+        "variable": "Well_c:storage",
+        "output_path": "${project_root}/outputs/vn_well_c_storage.json"
+      },
+      {
+        "variable": "Well_g:storage",
+        "output_path": "${project_root}/outputs/vn_well_g_storage.json"
+      }
+    ]
+  },
+
+  "SoilArray": {
+    "script_file": "${project_root}/models/soil_array.ohq",
+    "viz_file": "${project_root}/viz_soil_array.json",
+    "state_dir": "${project_root}/state/${model_key}",
+    "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
+    "state_variables": []
+  },
+
+  "PondCatchment": {
+    "script_file": "${project_root}/models/simple_pond_catchment.ohq",
+    "viz_file": "${project_root}/viz_pond_catchment.json",
+    "state_dir": "${project_root}/state/${model_key}",
+    "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
+    "state_variables": [
+      {
+        "variable": "Pond:storage",
+        "output_path": "${project_root}/outputs/pond_storage.json"
+      }
+    ]
+  },
+
+  "Drywell": {
+    "script_file": "${project_root}/models/drywell.ohq",
+    "viz_file": "${project_root}/viz_drywell.json",
+    "state_dir": "${project_root}/state/${model_key}",
+    "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
+    "state_variables": [
+      {
+        "variable": "Drywell:storage",
+        "output_path": "${project_root}/outputs/drywell_storage.json"
+      }
+    ]
+  },
+
+  "HQ": {
+    "script_file": "${project_root}/models/hq_drywell.ohq",
+    "viz_file": "${project_root}/viz_hq.json",
+    "state_dir": "${project_root}/state/${model_key}",
+    "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
+    "state_variables": []
+  },
+
+  "R": {
+    "script_file": "${project_root}/models/rosemead.ohq",
+    "viz_file": "${project_root}/viz_r.json",
+    "state_dir": "${project_root}/state/${model_key}",
+    "model_snapshot_dir": "${project_root}/snapshots/${model_key}",
+    "state_variables": []
+  }
     },
 
     "load_model_json": "",
