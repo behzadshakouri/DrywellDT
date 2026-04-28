@@ -342,8 +342,7 @@ StageResult DTRunner::runStage(StageKind kind,
         std::cout << "[Runner] Viz state written to: "
                   << vizStatePath.toStdString() << "\n";
 
-        const QString vizJsonPath =
-            QCoreApplication::applicationDirPath() + "/viz.json";
+        const QString vizJsonPath = QString::fromStdString(m_config.vizFile);
         const QString vizSvgPath  =
             QString::fromStdString(m_config.outputDir) + "/viz.svg";
         const QJsonObject fullState = readJson(vizStatePath);
@@ -379,8 +378,7 @@ StageResult DTRunner::runStage(StageKind kind,
             QString::fromStdString(m_config.outputDir) + "/forecast_viz_state.json";
         ohqSystem->SaveFullStateTo(forecastVizStatePath);
 
-        const QString vizJsonPath =
-            QCoreApplication::applicationDirPath() + "/viz.json";
+        const QString vizJsonPath = QString::fromStdString(m_config.vizFile);
         const QString forecastVizSvgPath =
             QString::fromStdString(m_config.outputDir) + "/forecast_viz.svg";
         const QJsonObject fullState = readJson(forecastVizStatePath);

@@ -2,7 +2,7 @@
  * OpenHydroQual Digital Twin — generic OHQ model runner
  *
  * main.cpp is intentionally thin:
- *   - Ensure runtime JSON files are available next to the binary
+ *   - Ensure config.json is available next to the binary
  *   - Load config
  *   - Initialise runner
  *   - Fire an immediate first run, then arm QTimer for subsequent intervals
@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
     QCoreApplication app(argc, argv);
 
     // ------------------------------------------------------------------
-    // 1. Ensure config.json and viz.json are available next to the binary
+    // 1. Ensure config.json is available next to the binary
     // ------------------------------------------------------------------
     // With DESTDIR = build-qmake-<host>/bin, ../../ points back to the
     // project root. The runtime/config folders are optional extra locations.
@@ -44,10 +44,9 @@ int main(int argc, char *argv[])
     if (!ensureRuntimeFile("config.json", runtimeSearchDirs))
         return 1;
 
-    // viz.json is required for SVG rendering. Keep this non-fatal so the
-    // solver can still run and write numeric outputs if visualization is not
-    // configured yet.
-    ensureRuntimeFile("viz.json", runtimeSearchDirs);
+    // Visualization files are now model-specific and selected by config.json
+    // through "viz_file" (e.g. ${project_root}/viz_drywell.json). The legacy
+    // appDir/viz.json fallback still exists inside DTConfig for older configs.
 
     // ------------------------------------------------------------------
     // 2. Load config.json from next to the binary

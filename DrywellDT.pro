@@ -234,9 +234,10 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 DISTFILES += \
     config.json \
-    viz.json
+    viz_drywell.json
 
-# Copy runtime JSON files next to the executable after every successful link.
-# This keeps build-qmake-<host>/bin self-contained and refreshes edited JSON.
-QMAKE_POST_LINK += $$QMAKE_COPY $$shell_quote($$PWD/config.json) $$shell_quote($$DESTDIR/config.json) $$escape_expand(\n\t)
-QMAKE_POST_LINK += $$QMAKE_COPY $$shell_quote($$PWD/viz.json)    $$shell_quote($$DESTDIR/viz.json)    $$escape_expand(\n\t)
+# Copy runtime config and model-specific visualization JSON next to the executable
+# after every successful link. The runner reads config.json from DESTDIR and then
+# uses config.json::viz_file to locate the selected visualization file.
+QMAKE_POST_LINK += $$QMAKE_COPY $$shell_quote($$PWD/config.json)       $$shell_quote($$DESTDIR/config.json)       $$escape_expand(\n\t)
+QMAKE_POST_LINK += $$QMAKE_COPY $$shell_quote($$PWD/viz_drywell.json) $$shell_quote($$DESTDIR/viz_drywell.json) $$escape_expand(\n\t)

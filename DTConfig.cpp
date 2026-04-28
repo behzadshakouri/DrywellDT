@@ -209,6 +209,21 @@ bool DTConfig::load(QString &errorMessage)
     loadModelJson = expandVars(raw.value("load_model_json").toString(), machineVars).toStdString();
     weatherFile   = expandVars(raw.value("weather_file").toString(), machineVars).toStdString();
 
+    // Model-specific visualization spec. This lets VN/R/HQ/Drywell each use
+    // a different viz JSON without renaming files to viz.json or recompiling.
+    QString vizFileQ = expandVars(raw.value("viz_file").toString(), machineVars).trimmed();
+    if (vizFileQ.isEmpty())
+        vizFileQ = QCoreApplication::applicationDirPath() + "/viz.json"; // legacy fallback
+
+    if (hasUnresolvedVar(vizFileQ))
+    {
+        errorMessage = "config.json viz_file contains unresolved path variable(s). "
+                       "Check machine/machines/project_root.";
+        return false;
+    }
+
+    vizFile = vizFileQ.toStdString();
+
     // --- weather ---
     noaaOffice    = raw.value("noaa_office").toString("LWX").toStdString();
     noaaGridX     = raw.value("noaa_grid_x").toInt(0);
@@ -292,6 +307,7 @@ bool DTConfig::load(QString &errorMessage)
     std::cout << "[Config] state_dir         : " << stateDir << "\n"
               << "[Config] output_dir        : " << outputDir << "\n"
               << "[Config] model_snapshot_dir: " << modelSnapshotDir << "\n"
+              << "[Config] viz_file          : " << vizFile << "\n"
               << "[Config] weather_source    : " << weatherSource << "\n"
               << "[Config] latitude          : " << latitude << "\n"
               << "[Config] longitude         : " << longitude << "\n"

@@ -39,6 +39,7 @@ public:
     std::string outputDir;         // directory for simulation output files / nginx-served outputs
     std::string modelSnapshotDir;  // directory for per-interval model JSON snapshots
     std::string weatherFile;       // optional weather JSON
+    std::string vizFile;           // visualization JSON spec for VizRenderer (model-specific)
 
     // --- weather / NOAA / Open-Meteo ---
     std::string weatherSource = "openmeteo"; // "noaa" or "openmeteo"
