@@ -72,6 +72,20 @@ public:
     // Optional fixed start datetime (ISO 8601). Empty = use current time / snapshot.
     std::string startDatetime;
 
+    // Optional stop datetime (ISO 8601). When the next interval start reaches
+    // this point, the runner triggers QCoreApplication::quit().
+    // Empty = run forever (real-time / continuously-updated forecast mode).
+    std::string stopDatetime;
+
+    // Wall-clock acceleration factor. The QTimer fires every
+    // (intervalMs / timeAcceleration) milliseconds, but each tick still
+    // advances `intervalMs` of *simulated* time.
+    //   1.0  = real time (default)
+    //   100  = 100x faster than real time
+    //   < 0  = invalid (rejected at load)
+    // Useful for historical / Truth-Twin runs.
+    double      timeAcceleration = 1.0;
+
     // --- forecast horizon ---
     // Optional duration of Stage B forecast window beyond the advance interval.
     // Same syntax as intervalStr. Empty / 0 = forecast disabled.

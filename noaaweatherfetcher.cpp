@@ -208,9 +208,7 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
     for (int i = 0; i < times.size(); ++i)
     {
         // Open-Meteo returns "2026-04-15T00:00" — always UTC (timezone=GMT)
-        QDateTime binStart = QDateTime::fromString(
-            times[i].toString(), "yyyy-MM-ddTHH:mm");
-        binStart.setTimeSpec(Qt::UTC);
+        QDateTime binStart = QDateTime::fromString(times[i].toString() + "Z", Qt::ISODate);
 
         if (!binStart.isValid())
             continue;
@@ -237,6 +235,114 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoPrecipitation(
     }
 
     std::cout << "[OpenMeteo] Precipitation bins loaded: " << loaded
+              << " (skipped " << skipped << " outside window)\n";
+
+    return precip;
+}
+
+// ---------------------------------------------------------------------------
+// getOpenMeteoHistoricalPrecipitation
+// Fetches hourly precipitation from Open-Meteo's archive endpoint
+// (ERA5-backed, no API key). Same response shape as the forecast endpoint;
+// the only differences are the URL and the use of start_date / end_date
+// (YYYY-MM-DD) instead of forecast_days.
+// ---------------------------------------------------------------------------
+CPrecipitation NOAAWeatherFetcher::getOpenMeteoHistoricalPrecipitation(
+    double latitude, double longitude,
+    const QDateTime &intervalStart,
+    const QDateTime &intervalEnd)
+{
+    CPrecipitation precip;
+    m_lastError.clear();
+
+    // The archive API expects whole-day start_date / end_date in UTC.
+    // Pad by one day on each side so we definitely cover all hourly bins
+    // that overlap the requested window after clamping.
+    const QString startDate =
+        intervalStart.toUTC().date().addDays(-1).toString("yyyy-MM-dd");
+    const QString endDate =
+        intervalEnd.toUTC().date().addDays(1).toString("yyyy-MM-dd");
+
+    QUrl url("https://archive-api.open-meteo.com/v1/archive");
+    QUrlQuery query;
+    query.addQueryItem("latitude",   QString::number(latitude,  'f', 5));
+    query.addQueryItem("longitude",  QString::number(longitude, 'f', 5));
+    query.addQueryItem("hourly",     "precipitation");
+    query.addQueryItem("start_date", startDate);
+    query.addQueryItem("end_date",   endDate);
+    query.addQueryItem("timezone",   "GMT");
+    url.setQuery(query);
+
+    std::cout << "[OpenMeteo-Archive] Fetching: "
+              << url.toString().toStdString() << "\n";
+
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent",
+                         "DTRunner/1.0 (openhydroqual@example.com)");
+
+    QNetworkReply *reply = manager->get(request);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        m_lastError = "[OpenMeteo-Archive] Network error: " + reply->errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        reply->deleteLater();
+        return precip;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(reply->readAll(), &parseError);
+    reply->deleteLater();
+
+    if (doc.isNull()) {
+        m_lastError = "[OpenMeteo-Archive] JSON parse error: " + parseError.errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        return precip;
+    }
+
+    const QJsonObject root   = doc.object();
+    const QJsonObject hourly = root.value("hourly").toObject();
+    const QJsonArray  times  = hourly.value("time").toArray();
+    const QJsonArray  values = hourly.value("precipitation").toArray();
+
+    if (times.isEmpty() || times.size() != values.size()) {
+        m_lastError = "[OpenMeteo-Archive] Unexpected response structure";
+        std::cerr << m_lastError.toStdString() << "\n";
+        return precip;
+    }
+
+    int loaded  = 0;
+    int skipped = 0;
+
+    for (int i = 0; i < times.size(); ++i)
+    {
+        QDateTime binStart = QDateTime::fromString(
+            times[i].toString(), "yyyy-MM-ddTHH:mm");
+        binStart.setTimeSpec(Qt::UTC);
+        if (!binStart.isValid()) continue;
+
+        const QDateTime binEnd = binStart.addSecs(3600);
+
+        if (binEnd <= intervalStart || binStart >= intervalEnd) {
+            ++skipped;
+            continue;
+        }
+
+        const QDateTime clampedStart = qMax(binStart, intervalStart);
+        const QDateTime clampedEnd   = qMin(binEnd,   intervalEnd);
+
+        const double s  = toOHQDaySerial(clampedStart);
+        const double e  = toOHQDaySerial(clampedEnd);
+        const double mm = values[i].toDouble();
+
+        precip.append(s, e, mm / 1000.0);
+        ++loaded;
+    }
+
+    std::cout << "[OpenMeteo-Archive] Precipitation bins loaded: " << loaded
               << " (skipped " << skipped << " outside window)\n";
 
     return precip;

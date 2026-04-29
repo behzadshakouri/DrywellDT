@@ -102,10 +102,20 @@ int main(int argc, char *argv[])
     // ------------------------------------------------------------------
     // 5. Arm the recurring timer for subsequent intervals
     // ------------------------------------------------------------------
+    // Wall-clock interval = simulated_interval / time_acceleration.
+    // At time_acceleration=1.0 this is plain real-time. At higher values,
+    // wall-clock ticks fire faster while the simulation still advances
+    // intervalMs of *simulated* time per tick — used by Truth-Twin /
+    // historical replay deployments.
     QTimer intervalTimer;
 
+    const double wallClockIntervalMsD =
+        static_cast<double>(config.intervalMs) / config.timeAcceleration;
+    const qint64 wallClockIntervalMs =
+        static_cast<qint64>(std::max(1.0, wallClockIntervalMsD));
+
     const qint64 safeIntervalMs =
-        std::min(config.intervalMs, static_cast<qint64>(INT_MAX));
+        std::min(wallClockIntervalMs, static_cast<qint64>(INT_MAX));
 
     intervalTimer.setInterval(static_cast<int>(safeIntervalMs));
 
@@ -123,8 +133,10 @@ int main(int argc, char *argv[])
 
     std::cout << "[Main] OHQ Digital Twin running. Deployment: "
               << config.deploymentName
-              << "  Interval: " << config.intervalStr
-              << "  (" << config.intervalMs << " ms)\n"
+              << "  Sim interval: " << config.intervalStr
+              << "  (" << config.intervalMs << " ms)"
+              << "  Wall-clock tick: " << safeIntervalMs << " ms"
+              << "  Acceleration: " << config.timeAcceleration << "x\n"
               << "[Main] Press Ctrl+C to stop.\n";
 
     // ------------------------------------------------------------------

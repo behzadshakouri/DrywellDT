@@ -1,7 +1,7 @@
 {
-"csv_url":"http://localhost/selected_output.csv",
-"viz_url":"http://localhost/viz.svg",
-"viz_state_url":"http://localhost/viz_state.json",
-"forecast_viz_url":"http://localhost/forecast_viz.svg",
-"forecast_viz_state_url":"http://localhost/forecast_viz_state.json"
+    "csv_url":                "http://localhost:8084/selected_output.csv",
+    "viz_url":                "http://localhost:8084/viz.svg",
+    "viz_state_url":          "http://localhost:8084/viz_state.json",
+    "forecast_viz_url":       "http://localhost:8084/forecast_viz.svg",
+    "forecast_viz_state_url": "http://localhost:8084/forecast_viz_state.json"
 }

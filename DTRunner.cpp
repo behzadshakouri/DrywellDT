@@ -62,6 +62,7 @@ bool DTRunner::init(QString &errorMessage)
                            QString::fromStdString(m_config.startDatetime);
             return false;
         }
+        m_nextIntervalStart.setTimeSpec(Qt::UTC);   // <-- ADD THIS
         std::cout << "[Runner] Using config start_datetime: "
                   << m_config.startDatetime << "\n";
     }
@@ -204,6 +205,23 @@ bool DTRunner::runOnce()
 
     std::cout << "[Runner] Cycle complete. Next cycle start: "
               << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
+
+    // ------------------------------------------------------------------
+    // Stop condition: configured stop_datetime reached
+    // ------------------------------------------------------------------
+    if (!m_config.stopDatetime.empty())
+    {
+        const QDateTime stopAt = QDateTime::fromString(
+            QString::fromStdString(m_config.stopDatetime), Qt::ISODate);
+        if (stopAt.isValid() && m_nextIntervalStart >= stopAt)
+        {
+            std::cout << "[Runner] stop_datetime reached ("
+                      << m_config.stopDatetime
+                      << "). Requesting clean shutdown.\n";
+            QCoreApplication::quit();
+        }
+    }
+
     return true;
 }
 
@@ -288,7 +306,7 @@ StageResult DTRunner::runStage(StageKind kind,
     }
 
     ohqSystem->SetSilent(false);
-    ohqSystem->CalcAllInitialValues();
+
 
     // Precipitation (clamped to this stage's window inside fetchPrecipitation)
     CPrecipitation precip = fetchPrecipitation(stageStart, stageEnd);
@@ -300,7 +318,7 @@ StageResult DTRunner::runStage(StageKind kind,
         precip.writefile(precipFile.toStdString());
     }
     injectPrecipitation(ohqSystem.get(), precip);
-
+    ohqSystem->CalcAllInitialValues();
     std::cout << "[Runner] Solving...\n";
     ohqSystem->Solve();
 
@@ -619,45 +637,74 @@ QJsonObject DTRunner::patchSimulationWindow(const QJsonObject &state,
 
 // ---------------------------------------------------------------------------
 // fetchPrecipitation
-// Fetches NOAA quantitative precipitation for [intervalStart, intervalEnd]
-// and returns a CPrecipitation object with bins in OHQ day-serial units.
-// NOAA returns mm; bins outside the interval window are excluded.
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// fetchPrecipitation
-// Fetches Open-Meteo precipitation for [intervalStart, intervalEnd] and
-// returns a CPrecipitation object with bins in OHQ day-serial units.
+// Fetches precipitation for [intervalStart, intervalEnd] from the source
+// configured in config.weather_source:
+//   "openmeteo"            -> 7-day forecast (real-time / forward mode)
+//   "openmeteo_historical" -> ERA5 archive   (Truth-Twin / replay mode)
+// Returns CPrecipitation with bins in OHQ day-serial units, in metres.
 // ---------------------------------------------------------------------------
 CPrecipitation DTRunner::fetchPrecipitation(const QDateTime &intervalStart,
                                             const QDateTime &intervalEnd)
 {
     NOAAWeatherFetcher fetcher;
 
-    if (m_config.weatherSource != "openmeteo")
-    {
-        std::cerr << "[Runner] Warning: weather_source '"
-                  << m_config.weatherSource
-                  << "' not supported; only 'openmeteo' is available.\n";
-        return CPrecipitation();
+    if (m_config.weatherSource == "openmeteo") {
+        CPrecipitation precip = fetcher.getOpenMeteoPrecipitation(
+            m_config.latitude, m_config.longitude,
+            intervalStart, intervalEnd);
+        if (precip.n == 0)
+            std::cerr << "[Runner] Warning: " << fetcher.lastError().toStdString() << "\n";
+        return precip;
     }
 
-    CPrecipitation precip = fetcher.getOpenMeteoPrecipitation(
-        m_config.latitude, m_config.longitude,
-        intervalStart, intervalEnd);
+    if (m_config.weatherSource == "openmeteo_historical") {
+        CPrecipitation precip = fetcher.getOpenMeteoHistoricalPrecipitation(
+            m_config.latitude, m_config.longitude,
+            intervalStart, intervalEnd);
+        if (precip.n == 0)
+            std::cerr << "[Runner] Warning: " << fetcher.lastError().toStdString() << "\n";
+        return precip;
+    }
 
-    if (precip.n == 0)
-        std::cerr << "[Runner] Warning: "
-                  << fetcher.lastError().toStdString() << "\n";
-
-    return precip;
+    std::cerr << "[Runner] Unknown weather_source: '"
+              << m_config.weatherSource << "' (expected 'openmeteo' or "
+              << "'openmeteo_historical')\n";
+    return CPrecipitation();
 }
-// ---------------------------------------------------------------------------
-// injectPrecipitation  (placeholder)
-// ---------------------------------------------------------------------------
+
 void DTRunner::injectPrecipitation(System *system, const CPrecipitation &precip)
 {
-    if (system->source("rain"))
-        system->source("rain")->Variable("timeseries")->SetTimeSeries(precip);
-    (void)system;
-    (void)precip;
+    if (precip.n == 0) {
+        std::cerr << "[Runner] injectPrecipitation: empty precipitation, skipping.\n";
+        return;
+    }
+
+    // The block name in the .ohq is "Rain" (capitalized) — match that exactly.
+    Source *src = system->source("Rain");
+    if (!src) {
+        std::cerr << "[Runner] injectPrecipitation: source 'Rain' not found in system.\n";
+        return;
+    }
+
+    auto *var = src->Variable("timeseries");
+    if (!var) {
+        std::cerr << "[Runner] injectPrecipitation: variable 'timeseries' not found on source 'Rain'.\n";
+        return;
+    }
+
+    var->SetTimeSeries(precip);
+    std::cout << "[Runner] Injected " << precip.n
+              << " precipitation bins into 'Rain' source.\n";
+
+    auto *intensityVar = src->Variable("timeseries");
+    if (intensityVar) {
+        std::cout << "[Inject DIAG] After SetTimeSeries on Rain.timeseries:\n";
+        std::cout << "  Rain.timeseries._timeseries.size() = "
+                  << var->GetTimeSeries()->size() << "\n";   // or whatever the getter is
+        std::cout << "  Rain.Intensity._val = "
+                  << intensityVar->GetVal() << "\n";  // should be 0 here, that's fine
+        std::cout << "  Rain.Intensity expression = "
+                  << intensityVar->GetExpression()->ToString() << "\n";
+    }
+    std::cout << "[Runner] Injected " << precip.n << " precipitation bins...\n";
 }

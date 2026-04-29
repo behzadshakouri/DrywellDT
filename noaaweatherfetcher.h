@@ -32,6 +32,15 @@ public:
         const QDateTime &intervalStart,
         const QDateTime &intervalEnd);
 
+    // Open-Meteo hourly precipitation **archive** (historical) — same units
+    // and bin convention as getOpenMeteoPrecipitation, but pulls from the
+    // ERA5-backed archive endpoint. Suitable for Truth-Twin / historical
+    // replay runs. Note: archive data is delayed ~5 days from real time.
+    CPrecipitation getOpenMeteoHistoricalPrecipitation(
+        double latitude, double longitude,
+        const QDateTime &intervalStart,
+        const QDateTime &intervalEnd);
+
     // Last error message from getOpenMeteoPrecipitation
     QString lastError() const { return m_lastError; }
 

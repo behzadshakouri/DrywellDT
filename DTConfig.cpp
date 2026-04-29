@@ -183,8 +183,17 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     longitude     = rt.value("longitude").toDouble(0.0);
 
     startDatetime      = rt.value("start_datetime").toString().trimmed().toStdString();
+    stopDatetime       = rt.value("stop_datetime").toString().trimmed().toStdString();
     intervalStr        = rt.value("interval").toString("1day").trimmed().toStdString();
     forecastHorizonStr = rt.value("forecast_horizon").toString().trimmed().toStdString();
+
+    timeAcceleration = rt.value("time_acceleration").toDouble(1.0);
+    if (timeAcceleration <= 0.0)
+    {
+        errorMessage = "config.json runtime.time_acceleration must be > 0 "
+                       "(got " + QString::number(timeAcceleration) + ")";
+        return false;
+    }
 
     QString intervalErr;
     intervalMs = parseIntervalMs(intervalStr, intervalErr);
@@ -283,6 +292,11 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
 
     if (!startDatetime.empty())
         std::cout << "[Config] start_datetime    : " << startDatetime << "\n";
+
+    if (!stopDatetime.empty())
+        std::cout << "[Config] stop_datetime     : " << stopDatetime << "\n";
+
+    std::cout << "[Config] time_acceleration : " << timeAcceleration << "x\n";
 
     if (!loadModelJson.empty())
         std::cout << "[Config] load_model_json   : " << loadModelJson << "\n";
