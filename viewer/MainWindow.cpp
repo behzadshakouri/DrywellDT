@@ -104,7 +104,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // ---- page header ----
     auto *title = new QLabel("DrywellDT Viewer");
     title->setObjectName("HeaderTitle");
-    auto *subtitle = new QLabel("Observed outputs — live from the OpenHydroQual digital twin");
+    auto *subtitle = new QLabel("Observed outputs — live from the OpenHydroQual Digital Twin");
     subtitle->setObjectName("HeaderSubtitle");
     root->addWidget(title);
     root->addWidget(subtitle);
