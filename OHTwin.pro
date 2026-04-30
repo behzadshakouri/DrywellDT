@@ -124,7 +124,9 @@ CONFIG(debug, debug|release) {
 
 # ── Project sources ──────────────────────────────────────────────
 SOURCES += \
+    DTAssimilation.cpp \
     DTConfig.cpp \
+    DTObservationBuffer.cpp \
     DTRunner.cpp \
     VizRenderer.cpp \
     main.cpp \
@@ -148,8 +150,6 @@ HEADERS += \
     ../OpenHydroQual/aquifolium/include/safevector.h \
     ../OpenHydroQual/aquifolium/include/safevector.hpp \
     ../OpenHydroQual/aquifolium/include/Block.h \
-    ../OpenHydroQual/aquifolium/include/BTC.h \
-    ../OpenHydroQual/aquifolium/include/BTCSet.h \
     ../OpenHydroQual/aquifolium/include/Expression.h \
     ../OpenHydroQual/aquifolium/include/Link.h \
     ../OpenHydroQual/aquifolium/include/Matrix.h \
@@ -185,10 +185,14 @@ HEADERS += \
     ../OpenHydroQual/aquifolium/include/GA/DistributionNUnif.h \
     ../OpenHydroQual/aquifolium/include/GA/Individual.h \
     ../OpenHydroQual/aquifolium/include/GA/GA.hpp \
-    ../OpenHydroQual/aquifolium/src/BTC.hpp \
-    ../OpenHydroQual/aquifolium/src/BTCSet.hpp \
+    ../OpenHydroQual/aquifolium/src/TimeSeries.hpp \
+    ../OpenHydroQual/aquifolium/src/TimeSeriesSet.hpp \
+    ../OpenHydroQual/aquifolium/include/TimeSeries.h \
+    ../OpenHydroQual/aquifolium/include/TimeSeriesSet.h \
     ../OpenHydroQual/aquifolium/include/reaction.h \
+    DTAssimilation.h \
     DTConfig.h \
+    DTObservationBuffer.h \
     DTRunner.h \
     VizRenderer.h \
     noaaweatherfetcher.h

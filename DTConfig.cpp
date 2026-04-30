@@ -242,6 +242,129 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     }
 
     // ------------------------------------------------------------------
+    // observations{} (optional; controls Truth Twin noise & save cadence)
+    // ------------------------------------------------------------------
+    // Defaults: no noise (sigma=0, tau=0) and save at the runtime interval.
+    observations.saveIntervalMs         = intervalMs;  // fallback: model interval
+    observations.noiseSigma             = 0.0;
+    observations.noiseCorrelationTimeMs = 0;
+
+    if (root.contains("observations"))
+    {
+        if (!root.value("observations").isObject())
+        {
+            errorMessage = "config.json 'observations' must be a JSON object";
+            return false;
+        }
+        const QJsonObject obs = root.value("observations").toObject();
+
+        // save_interval (string, same syntax as runtime.interval)
+        const QString saveIntervalQ =
+            obs.value("save_interval").toString().trimmed();
+        if (!saveIntervalQ.isEmpty())
+        {
+            QString saveErr;
+            const qint64 saveMs =
+                parseIntervalMs(saveIntervalQ.toStdString(), saveErr);
+            if (saveMs < 0)
+            {
+                errorMessage =
+                    "config.json observations.save_interval error: " + saveErr;
+                return false;
+            }
+            observations.saveIntervalMs = saveMs;
+        }
+
+        // noise_sigma (double, dimensionless)
+        if (obs.contains("noise_sigma"))
+        {
+            const QJsonValue v = obs.value("noise_sigma");
+            if (!v.isDouble())
+            {
+                errorMessage =
+                    "config.json observations.noise_sigma must be a number";
+                return false;
+            }
+            const double sigma = v.toDouble(0.0);
+            if (sigma < 0.0)
+            {
+                errorMessage = "config.json observations.noise_sigma must be >= 0 "
+                               "(got " + QString::number(sigma) + ")";
+                return false;
+            }
+            observations.noiseSigma = sigma;
+        }
+
+        // noise_correlation_time (string, same syntax as runtime.interval)
+        const QString tauQ =
+            obs.value("noise_correlation_time").toString().trimmed();
+        if (!tauQ.isEmpty())
+        {
+            QString tauErr;
+            const qint64 tauMs =
+                parseIntervalMs(tauQ.toStdString(), tauErr);
+            if (tauMs < 0)
+            {
+                errorMessage =
+                    "config.json observations.noise_correlation_time error: "
+                    + tauErr;
+                return false;
+            }
+            observations.noiseCorrelationTimeMs = tauMs;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // assimilation{} (optional; controls observation polling & calibration)
+    // ------------------------------------------------------------------
+    // Defaults: disabled. The block being absent means the forward twin
+    // does not poll any source and does not run calibration.
+    assimilation.enabled        = false;
+    assimilation.truthCsvUrl.clear();
+    assimilation.truthMetaUrl.clear();
+    assimilation.pollIntervalMs = 0;
+
+    if (root.contains("assimilation"))
+    {
+        if (!root.value("assimilation").isObject())
+        {
+            errorMessage = "config.json 'assimilation' must be a JSON object";
+            return false;
+        }
+        const QJsonObject as = root.value("assimilation").toObject();
+
+        const QString csvQ  = as.value("truth_csv_url").toString().trimmed();
+        const QString metaQ = as.value("truth_meta_url").toString().trimmed();
+        const QString pollQ = as.value("poll_interval").toString().trimmed();
+
+        if (csvQ.isEmpty())
+        {
+            errorMessage = "config.json assimilation.truth_csv_url is required "
+                           "when the assimilation block is present";
+            return false;
+        }
+        if (pollQ.isEmpty())
+        {
+            errorMessage = "config.json assimilation.poll_interval is required "
+                           "when the assimilation block is present";
+            return false;
+        }
+
+        QString pollErr;
+        const qint64 pollMs = parseIntervalMs(pollQ.toStdString(), pollErr);
+        if (pollMs < 0)
+        {
+            errorMessage = "config.json assimilation.poll_interval error: " + pollErr;
+            return false;
+        }
+
+        assimilation.enabled        = true;
+        assimilation.truthCsvUrl    = csvQ.toStdString();
+        assimilation.truthMetaUrl   = metaQ.toStdString(); // empty allowed
+        assimilation.pollIntervalMs = pollMs;
+    }
+
+    // ------------------------------------------------------------------
     // Auto-derived working directories under the deployment root
     // ------------------------------------------------------------------
     const QString rootQ = QString::fromStdString(deploymentRoot);
@@ -303,6 +426,32 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
 
     if (!weatherFile.empty())
         std::cout << "[Config] weather_file      : " << weatherFile << "\n";
+
+    std::cout << "[Config] obs.save_interval : " << observations.saveIntervalMs
+              << " ms\n"
+              << "[Config] obs.noise_sigma   : " << observations.noiseSigma
+              << "\n"
+              << "[Config] obs.noise_corr_t  : "
+              << observations.noiseCorrelationTimeMs << " ms";
+    if (observations.noiseCorrelationTimeMs == 0 && observations.noiseSigma > 0.0)
+        std::cout << " (white-noise limit)";
+    if (observations.noiseSigma == 0.0)
+        std::cout << " (noise disabled)";
+    std::cout << "\n";
+
+    if (assimilation.enabled)
+    {
+        std::cout << "[Config] assim.csv_url     : " << assimilation.truthCsvUrl  << "\n"
+                  << "[Config] assim.meta_url    : "
+                  << (assimilation.truthMetaUrl.empty() ? "(none)" : assimilation.truthMetaUrl)
+                  << "\n"
+                  << "[Config] assim.poll_int    : "
+                  << assimilation.pollIntervalMs << " ms\n";
+    }
+    else
+    {
+        std::cout << "[Config] assimilation      : disabled\n";
+    }
 
     return true;
 }

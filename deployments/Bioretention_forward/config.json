@@ -1,0 +1,24 @@
+{
+  "deployment": {
+    "name": "Bioretention_forward",
+    "model_file": "model/Bioretention.ohq",
+    "viz_file": "viz_bioretention.json",
+    "port": 8085
+  },
+  "runtime": {
+    "weather_source": "openmeteo_historical",
+    "latitude": 38.91088,
+    "longitude": -76.98569,
+    "interval": "1day",
+    "forecast_horizon": "",
+    "start_datetime": "2020-01-03T00:00:00",
+    "stop_datetime": "",
+    "time_acceleration": 1000,
+    "state_variables": []
+  },
+  "assimilation": {
+    "truth_csv_url": "http://localhost:8084/outputs/selected_output.csv",
+    "truth_meta_url": "http://localhost:8084/outputs/selected_output_meta.json",
+    "poll_interval": "10s"
+  }
+}

@@ -18,6 +18,53 @@ struct StateVarExport
 };
 
 // ---------------------------------------------------------------------------
+// ObservationConfig
+// Settings controlling synthetic-observation generation by the Truth Twin.
+//
+//   saveIntervalMs        : cadence at which observation snapshots are written
+//                           (independent of the model integration step;
+//                           defaults to the runtime interval if omitted).
+//   noiseSigma            : standard deviation of the multiplicative
+//                           log-normal noise applied to observed values:
+//                               x_obs = x_model * exp(sigma * epsilon)
+//                           where epsilon is an OU process with unit
+//                           stationary variance. 0 = noise disabled.
+//   noiseCorrelationTimeMs: correlation time tau of the OU process.
+//                           0 = white-noise limit.
+// ---------------------------------------------------------------------------
+struct ObservationConfig
+{
+    qint64 saveIntervalMs         = 0;   // 0 sentinel -> fall back to runtime intervalMs
+    double noiseSigma             = 0.0;
+    qint64 noiseCorrelationTimeMs = 0;
+};
+
+// ---------------------------------------------------------------------------
+// AssimilationConfig
+// Settings for pulling observations from a Truth Twin (or, eventually,
+// a real sensor stream) and for running data assimilation against them.
+//
+// The block is OPTIONAL in config.json. If absent, the runner does not
+// poll any observation source and assimilation is fully disabled — the
+// twin behaves as a pure forward simulator.
+//
+//   truthCsvUrl    : URL of the observation CSV (e.g. selected_output.csv
+//                    served over HTTP by the Truth Twin's nginx).
+//   truthMetaUrl   : URL of the metadata sidecar JSON describing the noise
+//                    model used to generate the observations. Optional;
+//                    if empty, the buffer falls back to sigma = 0.
+//   pollIntervalMs : how often the assimilation manager polls the source.
+//                    Independent of the forward-simulation interval.
+// ---------------------------------------------------------------------------
+struct AssimilationConfig
+{
+    bool        enabled        = false;        // true iff "assimilation" block present
+    std::string truthCsvUrl;
+    std::string truthMetaUrl;
+    qint64      pollIntervalMs = 0;
+};
+
+// ---------------------------------------------------------------------------
 // DTConfig
 //
 // Loads and validates a deployment's config.json.
@@ -94,6 +141,19 @@ public:
 
     // --- state variable exports ---
     std::vector<StateVarExport> stateVarExports;
+
+    // --- synthetic observations (Truth Twin) ---
+    // Controls the cadence and noise model for observation files written by
+    // the Truth Twin. All fields are optional; if the "observations" block
+    // is omitted from config.json, defaults yield no noise and saving at
+    // the runtime interval (i.e., behaves identically to a forward twin).
+    ObservationConfig observations;
+
+    // --- data assimilation (forward twin) ---
+    // Controls observation polling and (eventually) calibration. The whole
+    // block is optional; if absent, .enabled is false and assimilation is
+    // not initialized at all.
+    AssimilationConfig assimilation;
 
 private:
     // Parse "300s", "15min", "4hr", "1day" -> milliseconds.

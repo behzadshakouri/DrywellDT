@@ -6,6 +6,8 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
+#include <map>
+#include <memory>
 #include <string>
 #include "noaaweatherfetcher.h"
 #include "Precipitation.h"
@@ -13,6 +15,7 @@
 
 
 class System;
+class DTAssimilation;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -61,6 +64,12 @@ class DTRunner : public QObject
 
 public:
     explicit DTRunner(const DTConfig &config, QObject *parent = nullptr);
+
+    // Destructor is defined out-of-line in DTRunner.cpp so that the
+    // unique_ptr<DTAssimilation> member can hold an incomplete type
+    // here. (Forward declaration above keeps DTAssimilation.h out of
+    // this header's transitive include set.)
+    ~DTRunner() override;
 
     // Call once at start-up; initialises timing state.
     // Returns false if something is fatally wrong (bad config paths, etc.)
@@ -143,6 +152,31 @@ private:
                                  double cutoffTime);
 
     // -----------------------------------------------------------------------
+    // Synthetic-observation noise (Truth Twin)
+    // -----------------------------------------------------------------------
+
+    // Apply multiplicative log-normal noise driven by an Ornstein-Uhlenbeck
+    // process with unit stationary variance:
+    //     x_obs(t) = x_model(t) * exp(sigma * epsilon(t))
+    // The OU state epsilon is *persisted across calls* in m_ouState
+    // (one entry per series name) so correlation continues across cycles.
+    // First time a series name is seen, epsilon is drawn from N(0,1)
+    // (the stationary distribution).
+    //
+    // tauDays <= 0 is treated as the white-noise limit (each point gets
+    // an independent N(0,1) draw).
+    //
+    // No-op if sigma <= 0.
+    void applyOUNoiseStateful(TimeSeriesSet<double> &set,
+                              double sigma,
+                              double tauDays);
+
+    // Write outputs/selected_output_meta.json describing the noise model
+    // used to generate selected_output.csv (sigma, tau, save_interval, ts).
+    // Idempotent: re-writes on every cycle so `last_updated` stays fresh.
+    bool writeMetadataSidecar() const;
+
+    // -----------------------------------------------------------------------
     // State
     // -----------------------------------------------------------------------
     const DTConfig &m_config;
@@ -161,6 +195,28 @@ private:
     int m_runsCompleted = 0;
 
     bool m_selectedOutputWritten = false;
+
+    // -----------------------------------------------------------------------
+    // Truth Twin / observation noise state
+    // -----------------------------------------------------------------------
+
+    // Save cadence for noisy observations, in OHQ days
+    // (derived from m_config.observations.saveIntervalMs at init()).
+    double m_obsSaveIntervalDays = 0.0;
+
+    // Persistent OU state, one epsilon per observed-variable series name.
+    // Updated in-place by applyOUNoiseStateful() so that correlation
+    // continues smoothly across runOnce() cycles.
+    std::map<std::string, double> m_ouState;
+
+    // -----------------------------------------------------------------------
+    // Data assimilation (forward twin only)
+    // -----------------------------------------------------------------------
+    // Owned only when m_config.assimilation.enabled is true. Pointer
+    // (rather than value member) keeps the DTAssimilation header out of
+    // DTRunner.h's transitive include set and avoids constructing the
+    // QTimer-driven assimilation manager when assimilation is disabled.
+    std::unique_ptr<DTAssimilation> m_assimilation;
 };
 
 

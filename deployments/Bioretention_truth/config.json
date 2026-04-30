@@ -15,5 +15,10 @@
         "stop_datetime": "",
         "time_acceleration": 1000,
         "state_variables": []
+    },
+    "observations": {
+    	"save_interval": "1hr",
+    	"noise_sigma": 0.1,
+    	"noise_correlation_time": "6hr"
     }
 }

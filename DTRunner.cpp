@@ -2,6 +2,7 @@
 
 #include "System.h"
 #include "Script.h"
+#include "DTAssimilation.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -9,8 +10,10 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <cmath>
 #include <iostream>
 #include <memory>
+#include <random>
 #include "VizRenderer.h"
 
 // ---------------------------------------------------------------------------
@@ -28,7 +31,41 @@ DTRunner::DTRunner(const DTConfig &config, QObject *parent)
     // Pre-compute interval length in OHQ day units
     m_intervalDays  = static_cast<double>(config.intervalMs) / (86400.0 * 1000.0);
     m_forecastDays  = static_cast<double>(config.forecastHorizonMs) / (86400.0 * 1000.0);
+
+    // Pre-compute observation save cadence in OHQ day units. If the
+    // observations block was omitted, DTConfig::load() already defaulted
+    // saveIntervalMs to intervalMs, so this falls through to the model
+    // interval naturally. The defensive >0 guard is just belt-and-suspenders
+    // against a future code path that might leave it zero.
+    m_obsSaveIntervalDays =
+        static_cast<double>(config.observations.saveIntervalMs) / (86400.0 * 1000.0);
+    if (m_obsSaveIntervalDays <= 0.0)
+        m_obsSaveIntervalDays = m_intervalDays;
+
+    std::cout << "[Runner] obs save interval : "
+              << m_obsSaveIntervalDays << " day(s)\n";
+    if (config.observations.noiseSigma > 0.0)
+    {
+        const double tauDays =
+            static_cast<double>(config.observations.noiseCorrelationTimeMs)
+            / (86400.0 * 1000.0);
+        std::cout << "[Runner] obs noise sigma   : "
+                  << config.observations.noiseSigma << "\n"
+                  << "[Runner] obs noise tau     : " << tauDays
+                  << " day(s)";
+        if (tauDays <= 0.0) std::cout << " (white-noise limit)";
+        std::cout << "\n";
+    }
+    else
+    {
+        std::cout << "[Runner] obs noise         : disabled (sigma=0)\n";
+    }
 }
+
+// Out-of-line destructor: required so that unique_ptr<DTAssimilation>'s
+// destruction can see the full DTAssimilation type (declared via the
+// #include at the top of this file).
+DTRunner::~DTRunner() = default;
 
 // ---------------------------------------------------------------------------
 // init
@@ -92,6 +129,38 @@ bool DTRunner::init(QString &errorMessage)
             std::cout << "[Runner] Resuming from previous state; next interval start: "
                       << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Data assimilation (optional). Constructed only if the assimilation
+    // block is present in config.json. Failure here is fatal: we don't
+    // want to silently run a forward-only twin when the operator
+    // explicitly configured assimilation.
+    // ------------------------------------------------------------------
+    if (m_config.assimilation.enabled)
+    {
+        m_assimilation.reset(new DTAssimilation(m_config, this));
+
+        // Diagnostic logging on poll outcomes.
+        QObject::connect(m_assimilation.get(), &DTAssimilation::buffered,
+                         this, [](qint64 n) {
+            std::cout << "[Assim] poll OK — " << n << " points buffered\n";
+        });
+        QObject::connect(m_assimilation.get(), &DTAssimilation::pollFailed,
+                         this, [](const QString &err) {
+            std::cerr << "[Assim] poll failed: " << err.toStdString() << "\n";
+        });
+
+        QString assimErr;
+        if (!m_assimilation->start(assimErr))
+        {
+            errorMessage = "DTAssimilation::start() failed: " + assimErr;
+            return false;
+        }
+    }
+    else
+    {
+        std::cout << "[Runner] Assimilation disabled (no 'assimilation' block in config).\n";
     }
 
     return true;
@@ -189,12 +258,67 @@ bool DTRunner::runOnce()
     // ------------------------------------------------------------------
     {
         const double cutoffSerial = toOHQDaySerial(advanceStart);
+
+        // ------------------------------------------------------------
+        // Step 0: OHQ's observed-output series record the integration's
+        //         t=0 sample as 0 (initial-state placeholder before the
+        //         first solver step). Left in place this produces a
+        //         visible "half-value" artifact at every cycle boundary
+        //         after make_uniform interpolates from 0 up to the first
+        //         real value. Replace each series' first sample with its
+        //         second sample so make_uniform interpolates between two
+        //         comparable values. No-op if a series has fewer than
+        //         two points.
+        // ------------------------------------------------------------
+        TimeSeriesSet<double> advanceClean = advance.observed;
+        for (size_t s = 0; s < advanceClean.size(); ++s)
+        {
+            TimeSeries<double> &ts = advanceClean[s];
+            if (ts.size() >= 2)
+                ts.setValue(0, ts.getValue(1));
+        }
+
+        // ------------------------------------------------------------
+        // Step 1: resample Advance observed outputs to the configured
+        //         observation cadence (m_obsSaveIntervalDays).
+        // ------------------------------------------------------------
+        TimeSeriesSet<double> advanceProcessed =
+            advanceClean.make_uniform(m_obsSaveIntervalDays);
+
+        // ------------------------------------------------------------
+        // Step 2: apply correlated multiplicative log-normal noise
+        //         using an OU process whose state persists across
+        //         cycles (m_ouState). No-op if sigma == 0.
+        // ------------------------------------------------------------
+        if (m_config.observations.noiseSigma > 0.0)
+        {
+            const double tauDays =
+                static_cast<double>(m_config.observations.noiseCorrelationTimeMs)
+                / (86400.0 * 1000.0);
+            applyOUNoiseStateful(advanceProcessed,
+                                 m_config.observations.noiseSigma,
+                                 tauDays);
+        }
+
+        // ------------------------------------------------------------
+        // Step 3: forecast tail left clean. The Truth Twin doesn't run
+        //         a forecast stage anyway; if a future config does and
+        //         needs noise, snapshot/restore m_ouState around a
+        //         noised forecast block here.
+        // ------------------------------------------------------------
         TimeSeriesSet<double> emptyForecast;
         const TimeSeriesSet<double> &forecastObs =
             forecast.ok ? forecast.observed : emptyForecast;
 
-        if (!mergeIntoSelectedOutput(advance.observed, forecastObs, cutoffSerial))
+        if (!mergeIntoSelectedOutput(advanceProcessed, forecastObs, cutoffSerial))
             std::cerr << "[Runner] selected_output.csv merge failed (continuing).\n";
+
+        // ------------------------------------------------------------
+        // Step 4: refresh the metadata sidecar (cheap; describes the
+        //         noise model that produced selected_output.csv).
+        // ------------------------------------------------------------
+        if (!writeMetadataSidecar())
+            std::cerr << "[Runner] selected_output_meta.json write failed (continuing).\n";
     }
 
     // ------------------------------------------------------------------
@@ -707,4 +831,130 @@ void DTRunner::injectPrecipitation(System *system, const CPrecipitation &precip)
                   << intensityVar->GetExpression()->ToString() << "\n";
     }
     std::cout << "[Runner] Injected " << precip.n << " precipitation bins...\n";
+}
+
+
+// ---------------------------------------------------------------------------
+// applyOUNoiseStateful
+//
+// Apply multiplicative log-normal noise driven by a continuous Ornstein-
+// Uhlenbeck process with unit stationary variance:
+//
+//     x_obs(t) = x_model(t) * exp(sigma * epsilon(t))
+//
+// where epsilon evolves according to dε = -ε/τ dt + √(2/τ) dW, integrated
+// with the *exact* Gaussian transition (not Euler-Maruyama):
+//
+//     epsilon_{n+1} = phi * epsilon_n + sqrt(1 - phi^2) * eta_n
+//     phi           = exp(-Δt / τ)
+//     eta_n         ~ N(0, 1)
+//
+// The OU state is persisted in m_ouState across runOnce() cycles, keyed by
+// series name, so correlation continues smoothly between cycles. First time
+// a series name is seen, epsilon is drawn from N(0,1) (the stationary
+// distribution).
+//
+// τ <= 0 is treated as the white-noise limit (each point gets an independent
+// N(0,1) draw). σ <= 0 is a no-op.
+// ---------------------------------------------------------------------------
+void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
+                                    double sigma,
+                                    double tauDays)
+{
+    if (sigma <= 0.0) return;
+    if (set.empty()) return;
+
+    // One shared RNG for the whole process. random_device seeds it once.
+    // For reproducible Truth Twins, swap in a fixed seed (e.g. from
+    // m_config.observations.seed if you add such a field) here.
+    static thread_local std::mt19937 gen{ std::random_device{}() };
+    static thread_local std::normal_distribution<double> N01{ 0.0, 1.0 };
+
+    for (size_t s = 0; s < set.size(); ++s)
+    {
+        TimeSeries<double> &ts = set[s];
+        if (ts.empty()) continue;
+
+        // Name-indexed: robust against OHQ reordering observed outputs.
+        const std::string seriesKey = ts.name();
+
+        // Initialize or fetch the persisted OU state for this series.
+        double eps;
+        auto it = m_ouState.find(seriesKey);
+        if (it == m_ouState.end())
+        {
+            eps = N01(gen);                  // stationary draw
+            m_ouState[seriesKey] = eps;
+        }
+        else
+        {
+            eps = it->second;
+        }
+
+        // Walk the series, advancing OU exactly between samples.
+        for (size_t i = 0; i < ts.size(); ++i)
+        {
+            if (i > 0)
+            {
+                const double dt = ts.getTime(i) - ts.getTime(i - 1);
+
+                if (tauDays <= 0.0 || dt <= 0.0)
+                {
+                    // White-noise limit / degenerate dt: independent draw.
+                    eps = N01(gen);
+                }
+                else
+                {
+                    const double phi = std::exp(-dt / tauDays);
+                    const double sqrt_one_minus_phi2 =
+                        std::sqrt(std::max(0.0, 1.0 - phi * phi));
+                    eps = phi * eps + sqrt_one_minus_phi2 * N01(gen);
+                }
+            }
+
+            const double clean = ts.getValue(i);
+            const double noised = clean * std::exp(sigma * eps);
+            ts.setValue(i, noised);
+        }
+
+        // Persist epsilon for the next cycle.
+        m_ouState[seriesKey] = eps;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// writeMetadataSidecar
+//
+// Writes outputs/selected_output_meta.json describing the noise model
+// applied to selected_output.csv. Idempotent: re-written every cycle so
+// `last_updated_utc` reflects the most recent merge.
+// ---------------------------------------------------------------------------
+bool DTRunner::writeMetadataSidecar() const
+{
+    QJsonObject obsBlock;
+    obsBlock["save_interval_ms"] =
+        static_cast<qint64>(m_config.observations.saveIntervalMs);
+    obsBlock["save_interval_days"] = m_obsSaveIntervalDays;
+    obsBlock["noise_sigma"] = m_config.observations.noiseSigma;
+    obsBlock["noise_correlation_time_ms"] =
+        static_cast<qint64>(m_config.observations.noiseCorrelationTimeMs);
+    obsBlock["noise_correlation_time_days"] =
+        static_cast<double>(m_config.observations.noiseCorrelationTimeMs)
+        / (86400.0 * 1000.0);
+    obsBlock["noise_model"] =
+        QStringLiteral("multiplicative_log_normal_OU "
+                       "x_obs = x_model * exp(sigma * epsilon)");
+    obsBlock["ou_stationary_variance"] = 1.0;
+
+    QJsonObject root;
+    root["observations"]    = obsBlock;
+    root["deployment_name"] = QString::fromStdString(m_config.deploymentName);
+    root["runs_completed"]  = m_runsCompleted;
+    root["last_updated_utc"] =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+    const QString path =
+        QString::fromStdString(m_config.outputDir) + "/selected_output_meta.json";
+
+    return writeJson(root, path);
 }
