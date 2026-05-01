@@ -2,15 +2,130 @@
   "canvas": {
     "x": 0,
     "y": 0,
-    "width": 920,
-    "height": 820
+    "width": 960,
+    "height": 860
   },
   "components": [
     {
+      "id": "title",
+      "label": "VN Drywell Digital Twin",
+      "x": 20,
+      "y": 10,
+      "width": 250,
+      "height": 24,
+      "draw": [
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.55,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 15,
+          "font_weight": 800,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "theta_legend_dry",
+      "label": "dry",
+      "x": 715,
+      "y": 18,
+      "width": 45,
+      "height": 18,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 2,
+          "fill": "#FEF3C7",
+          "stroke": "#CBD5E1",
+          "stroke_width": 0.6
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": "dry",
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "theta_legend_mid",
+      "label": "moist",
+      "x": 765,
+      "y": 18,
+      "width": 45,
+      "height": 18,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 2,
+          "fill": "#60A5FA",
+          "stroke": "#CBD5E1",
+          "stroke_width": 0.6
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": "moist",
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#FFFFFF"
+        }
+      ]
+    },
+    {
+      "id": "theta_legend_wet",
+      "label": "wet",
+      "x": 815,
+      "y": 18,
+      "width": 45,
+      "height": 18,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 2,
+          "fill": "#1E40AF",
+          "stroke": "#CBD5E1",
+          "stroke_width": 0.6
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.62,
+          "anchor": "middle",
+          "value": "wet",
+          "font_size": 8,
+          "font_weight": 600,
+          "fill": "#FFFFFF"
+        }
+      ]
+    },
+    {
       "id": "inflow_csv",
       "label": "Inflow CSV",
-      "x": 155,
-      "y": 15,
+      "x": 165,
+      "y": 48,
       "width": 125,
       "height": 45,
       "draw": [
@@ -66,7 +181,7 @@
       "thresholds": [
         {
           "below": 0.4,
-          "color": "#93C5FD"
+          "color": "#BFDBFE"
         },
         {
           "below": 0.8,
@@ -231,9 +346,9 @@
       "label": "Ground Water",
       "block": "Ground Water",
       "x": 111,
-      "y": 765,
-      "width": 745,
-      "height": 35,
+      "y": 790,
+      "width": 780,
+      "height": 38,
       "fill_max": 100000,
       "bind": {
         "fill_value": {
@@ -262,7 +377,7 @@
             "bind": "label"
           },
           "font_size": 12,
-          "font_weight": 700,
+          "font_weight": 800,
           "fill": "#1E293B"
         }
       ]
@@ -292,18 +407,18 @@
         "x": {
           "counter": "i",
           "range": [
-            190,
-            750
+            205,
+            790
           ]
         },
         "y": {
           "counter": "j",
           "range": [
-            120,
-            335
+            135,
+            355
           ]
         },
-        "width": 28,
+        "width": 29,
         "height": 11,
         "fill_max": 1,
         "bind": {
@@ -319,11 +434,11 @@
           },
           {
             "below": 0.3,
-            "color": "#93C5FD"
+            "color": "#60A5FA"
           },
           {
             "above": 0.3,
-            "color": "#1D4ED8"
+            "color": "#1E40AF"
           }
         ],
         "draw": [
@@ -367,17 +482,17 @@
           "counter": "i",
           "range": [
             111,
-            750
+            790
           ]
         },
         "y": {
           "counter": "j",
           "range": [
-            360,
-            735
+            385,
+            760
           ]
         },
-        "width": 28,
+        "width": 29,
         "height": 20,
         "fill_max": 1,
         "bind": {
