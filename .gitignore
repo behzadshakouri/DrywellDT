@@ -86,3 +86,7 @@ build-qmake/bin/
 build-qmake/moc/
 
 build-qmake/obj/
+
+build-wasm-viewer/
+
+viewer/build/release/
