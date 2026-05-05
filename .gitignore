@@ -90,3 +90,7 @@ build-qmake/obj/
 viewer/build/WebAssembly_Qt_6_8_3_multi_threaded-Debug/.qtc_clangd/
 
 viewer/build/WebAssembly_Qt_6_8_3_multi_threaded-Release/
+
+build-wasm-viewer/
+
+viewer/build/release/

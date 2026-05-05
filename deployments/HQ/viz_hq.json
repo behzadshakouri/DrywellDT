@@ -1,0 +1,756 @@
+{
+  "canvas": {
+    "x": 0,
+    "y": 0,
+    "width": 1120,
+    "height": 900
+  },
+  "components": [
+    {
+      "id": "inflow",
+      "label": "Inflow CSV",
+      "x": 55,
+      "y": 30,
+      "width": 130,
+      "height": 45,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 7,
+          "fill": "#E0F2FE",
+          "stroke": "#0284C7",
+          "stroke_width": 1.4
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.45,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#075985"
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.74,
+          "anchor": "middle",
+          "value": "Khiem rainfall",
+          "font_size": 8,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "pond",
+      "label": "Infiltration Pond",
+      "block": "Infiltration_Pond",
+      "x": 220,
+      "y": 28,
+      "width": 145,
+      "height": 65,
+      "fill_max": 10,
+      "bind": {
+        "fill_value": {
+          "block": "Infiltration_Pond",
+          "property": "Storage"
+        }
+      },
+      "thresholds": [
+        {
+          "below": 0.4,
+          "color": "#BFDBFE"
+        },
+        {
+          "below": 0.8,
+          "color": "#3B82F6"
+        },
+        {
+          "above": 0.8,
+          "color": "#1D4ED8"
+        }
+      ],
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": 0,
+          "w": 0.84,
+          "h": 1,
+          "rx": 8,
+          "fill": "#EFF6FF",
+          "stroke": "#334155",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": {
+            "expr": "1 - fill_fraction"
+          },
+          "w": 0.84,
+          "h": {
+            "bind": "fill_fraction"
+          },
+          "fill": {
+            "bind": "water_color"
+          },
+          "clip": true
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.18,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "side_chamber",
+      "label": "Side Settling",
+      "block": "Side_Settling_Chamber",
+      "x": 165,
+      "y": 130,
+      "width": 70,
+      "height": 245,
+      "fill_max": 50,
+      "bind": {
+        "fill_value": {
+          "block": "Side_Settling_Chamber",
+          "property": "Storage"
+        }
+      },
+      "thresholds": [
+        {
+          "below": 0.4,
+          "color": "#BFDBFE"
+        },
+        {
+          "below": 0.8,
+          "color": "#3B82F6"
+        },
+        {
+          "above": 0.8,
+          "color": "#1D4ED8"
+        }
+      ],
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": 0,
+          "w": 0.84,
+          "h": 1,
+          "rx": 8,
+          "fill": "#EFF6FF",
+          "stroke": "#334155",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": {
+            "expr": "1 - fill_fraction"
+          },
+          "w": 0.84,
+          "h": {
+            "bind": "fill_fraction"
+          },
+          "fill": {
+            "bind": "water_color"
+          },
+          "clip": true
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.09,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "sed_chamber",
+      "label": "Sedimentation",
+      "block": "Sedimentation_Chamber",
+      "x": 285,
+      "y": 130,
+      "width": 70,
+      "height": 285,
+      "fill_max": 50,
+      "bind": {
+        "fill_value": {
+          "block": "Sedimentation_Chamber",
+          "property": "Storage"
+        }
+      },
+      "thresholds": [
+        {
+          "below": 0.4,
+          "color": "#BFDBFE"
+        },
+        {
+          "below": 0.8,
+          "color": "#3B82F6"
+        },
+        {
+          "above": 0.8,
+          "color": "#1D4ED8"
+        }
+      ],
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": 0,
+          "w": 0.84,
+          "h": 1,
+          "rx": 8,
+          "fill": "#EFF6FF",
+          "stroke": "#334155",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": {
+            "expr": "1 - fill_fraction"
+          },
+          "w": 0.84,
+          "h": {
+            "bind": "fill_fraction"
+          },
+          "fill": {
+            "bind": "water_color"
+          },
+          "clip": true
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.08,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "junction",
+      "label": "Junction",
+      "block": "Junction_Elastic",
+      "x": 210,
+      "y": 455,
+      "width": 48,
+      "height": 48,
+      "fill_max": 1,
+      "bind": {
+        "fill_value": {
+          "block": "Junction_Elastic",
+          "property": "Storage"
+        }
+      },
+      "draw": [
+        {
+          "shape": "ellipse",
+          "cx": 0.5,
+          "cy": 0.5,
+          "rx": 0.45,
+          "ry": 0.45,
+          "fill": "#FDE68A",
+          "stroke": "#92400E",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.56,
+          "anchor": "middle",
+          "value": "J",
+          "font_size": 15,
+          "font_weight": 700,
+          "fill": "#78350F"
+        }
+      ]
+    },
+    {
+      "id": "drywell",
+      "label": "DryWell",
+      "block": "DryWell",
+      "x": 335,
+      "y": 320,
+      "width": 80,
+      "height": 405,
+      "fill_max": 50,
+      "bind": {
+        "fill_value": {
+          "block": "DryWell",
+          "property": "Storage"
+        }
+      },
+      "thresholds": [
+        {
+          "below": 0.4,
+          "color": "#BFDBFE"
+        },
+        {
+          "below": 0.8,
+          "color": "#3B82F6"
+        },
+        {
+          "above": 0.8,
+          "color": "#1D4ED8"
+        }
+      ],
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": 0,
+          "w": 0.84,
+          "h": 1,
+          "rx": 8,
+          "fill": "#EFF6FF",
+          "stroke": "#334155",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "rect",
+          "x": 0.08,
+          "y": {
+            "expr": "1 - fill_fraction"
+          },
+          "w": 0.84,
+          "h": {
+            "bind": "fill_fraction"
+          },
+          "fill": {
+            "bind": "water_color"
+          },
+          "clip": true
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.06,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#0F172A"
+        }
+      ]
+    },
+    {
+      "id": "downstream",
+      "label": "Downstream",
+      "block": "Downstream_Boundary",
+      "x": 420,
+      "y": 42,
+      "width": 110,
+      "height": 42,
+      "fill_max": 100000,
+      "bind": {
+        "fill_value": {
+          "block": "Downstream_Boundary",
+          "property": "Storage"
+        }
+      },
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 7,
+          "fill": "#F1F5F9",
+          "stroke": "#64748B",
+          "stroke_width": 1.4
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.55,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#334155"
+        }
+      ]
+    },
+    {
+      "id": "gw",
+      "label": "GW",
+      "block": "GW",
+      "x": 430,
+      "y": 840,
+      "width": 610,
+      "height": 38,
+      "fill_max": 100000,
+      "bind": {
+        "fill_value": {
+          "block": "GW",
+          "property": "Storage"
+        }
+      },
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 4,
+          "fill": "#CBD5E1",
+          "stroke": "#475569",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.6,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 12,
+          "font_weight": 700,
+          "fill": "#1E293B"
+        }
+      ]
+    }
+  ],
+  "repeat_components": [
+    {
+      "counters": {
+        "r": {
+          "range": [
+            1,
+            34
+          ]
+        },
+        "c": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "id": "soil_${r}_${c}",
+        "type": "soil",
+        "label": "S ${r},${c}",
+        "block": "Soil (${r}$${c})",
+        "x": {
+          "counter": "c",
+          "range": [
+            455,
+            1005
+          ]
+        },
+        "y": {
+          "counter": "r",
+          "range": [
+            110,
+            740
+          ]
+        },
+        "width": 42,
+        "height": 13,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "Soil (${r}$${c})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.22
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "r": {
+          "range": [
+            34,
+            37
+          ]
+        },
+        "c": {
+          "range": [
+            0,
+            10
+          ]
+        }
+      },
+      "template": {
+        "id": "soildeep_${r}_${c}",
+        "type": "soil_deep",
+        "label": "SD ${r},${c}",
+        "block": "SoilDeep (${r}$${c})",
+        "x": {
+          "counter": "c",
+          "range": [
+            430,
+            1005
+          ]
+        },
+        "y": {
+          "counter": "r",
+          "range": [
+            760,
+            815
+          ]
+        },
+        "width": 42,
+        "height": 13,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "SoilDeep (${r}$${c})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.22
+          }
+        ]
+      }
+    }
+  ],
+  "connectors": [
+    {
+      "link": "Infiltration_Pond - Side_Settling_Chamber",
+      "from": "Infiltration_Pond",
+      "to": "Side_Settling_Chamber",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "Infiltration_Pond - Side_Settling_Chamber",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "weir",
+      "from": "Infiltration_Pond",
+      "to": "Downstream_Boundary",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "weir",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "Side_Settling_Chamber-Sedimentation_Chamber",
+      "from": "Side_Settling_Chamber",
+      "to": "Sedimentation_Chamber",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "Side_Settling_Chamber-Sedimentation_Chamber",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "Sedimentation_Chamber-DryWell",
+      "from": "Sedimentation_Chamber",
+      "to": "DryWell",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "Sedimentation_Chamber-DryWell",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "Sedimentation_Chamber-Junction_Elastic",
+      "from": "Sedimentation_Chamber",
+      "to": "Junction_Elastic",
+      "attach": "auto",
+      "style": "line",
+      "bind": {
+        "flow_value": {
+          "link": "Sedimentation_Chamber-Junction_Elastic",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "Junction_Elastic-DryWell",
+      "from": "Junction_Elastic",
+      "to": "DryWell",
+      "attach": "auto",
+      "style": "line",
+      "bind": {
+        "flow_value": {
+          "link": "Junction_Elastic-DryWell",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "Side_Settling_Chamber-Soil",
+      "from": "Side_Settling_Chamber",
+      "to": "Soil (15$5)",
+      "attach": "auto",
+      "style": "line",
+      "bind": {
+        "flow_value": {
+          "link": "Side_Settling_Chamber-Soil",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "DryWell - SoilDeep (34$0)",
+      "from": "DryWell",
+      "to": "SoilDeep (34$0)",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "DryWell - SoilDeep (34$0)",
+          "property": "flow"
+        }
+      }
+    }
+  ],
+  "repeat_connectors": [
+    {
+      "counters": {
+        "r": {
+          "range": [
+            15,
+            34
+          ]
+        }
+      },
+      "template": {
+        "link": "DryWell - Soil (${r}$1)",
+        "from": "DryWell",
+        "to": "Soil (${r}$1)",
+        "attach": "auto",
+        "style": "line",
+        "bind": {
+          "flow_value": {
+            "link": "DryWell - Soil (${r}$1)",
+            "property": "flow"
+          }
+        }
+      }
+    },
+    {
+      "counters": {
+        "c": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "link": "SoilDeep - GW (${c})",
+        "from": "SoilDeep (37$${c})",
+        "to": "GW",
+        "attach": "auto",
+        "style": "line",
+        "bind": {
+          "flow_value": {
+            "link": "SoilDeep - GW (${c})",
+            "property": "flow"
+          }
+        }
+      }
+    }
+  ]
+}

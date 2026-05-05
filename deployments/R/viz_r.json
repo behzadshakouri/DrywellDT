@@ -1,0 +1,799 @@
+{
+  "canvas": {
+    "x": 0,
+    "y": 0,
+    "width": 1180,
+    "height": 900
+  },
+  "components": [
+    {
+      "id": "catchment",
+      "label": "Catchment",
+      "block": "Catchment (1)",
+      "x": 515,
+      "y": 20,
+      "width": 120,
+      "height": 55,
+      "fill_max": 10,
+      "bind": {
+        "fill_value": {
+          "block": "Catchment (1)",
+          "property": "depth"
+        }
+      },
+      "thresholds": [
+        {
+          "below": 0.4,
+          "color": "#BFDBFE"
+        },
+        {
+          "below": 0.8,
+          "color": "#3B82F6"
+        },
+        {
+          "above": 0.8,
+          "color": "#1D4ED8"
+        }
+      ],
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 7,
+          "fill": "#E0F2FE",
+          "stroke": "#0284C7",
+          "stroke_width": 1.4
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.55,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#075985"
+        }
+      ]
+    },
+    {
+      "id": "gw",
+      "label": "GW",
+      "block": "GW",
+      "x": 90,
+      "y": 840,
+      "width": 1000,
+      "height": 38,
+      "fill_max": 100000,
+      "bind": {
+        "fill_value": {
+          "block": "GW",
+          "property": "Storage"
+        }
+      },
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 4,
+          "fill": "#CBD5E1",
+          "stroke": "#475569",
+          "stroke_width": 1.5
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.6,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 12,
+          "font_weight": 700,
+          "fill": "#1E293B"
+        }
+      ]
+    },
+    {
+      "id": "legend_engineered",
+      "label": "Engineered soil column",
+      "x": 475,
+      "y": 90,
+      "width": 150,
+      "height": 28,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 7,
+          "fill": "#ECFDF5",
+          "stroke": "#059669",
+          "stroke_width": 1.4
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.55,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#064E3B"
+        }
+      ]
+    },
+    {
+      "id": "legend_subbase",
+      "label": "Aggregate subbase",
+      "x": 650,
+      "y": 90,
+      "width": 160,
+      "height": 28,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 7,
+          "fill": "#F1F5F9",
+          "stroke": "#64748B",
+          "stroke_width": 1.4
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.55,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#334155"
+        }
+      ]
+    },
+    {
+      "id": "legend_native",
+      "label": "Native soil domain",
+      "x": 190,
+      "y": 90,
+      "width": 180,
+      "height": 28,
+      "draw": [
+        {
+          "shape": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "rx": 7,
+          "fill": "#FFF7ED",
+          "stroke": "#EA580C",
+          "stroke_width": 1.4
+        },
+        {
+          "shape": "text",
+          "x": 0.5,
+          "y": 0.55,
+          "anchor": "middle",
+          "value": {
+            "bind": "label"
+          },
+          "font_size": 10,
+          "font_weight": 700,
+          "fill": "#7C2D12"
+        }
+      ]
+    }
+  ],
+  "repeat_components": [
+    {
+      "counters": {
+        "j": {
+          "range": [
+            1,
+            8
+          ]
+        }
+      },
+      "template": {
+        "id": "eng_${j}",
+        "type": "engineered_soil",
+        "label": "ES ${j}",
+        "block": "EngineeredSoil (${j})",
+        "x": 520,
+        "y": {
+          "counter": "j",
+          "range": [
+            135,
+            280
+          ]
+        },
+        "width": 80,
+        "height": 15,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "EngineeredSoil (${j})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.35
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "j": {
+          "range": [
+            9,
+            31
+          ]
+        }
+      },
+      "template": {
+        "id": "ueng_${j}",
+        "type": "engineered_soil_deep",
+        "label": "UES ${j}",
+        "block": "UEngineered (${j})",
+        "x": 520,
+        "y": {
+          "counter": "j",
+          "range": [
+            305,
+            790
+          ]
+        },
+        "width": 80,
+        "height": 13,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "UEngineered (${j})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.3
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "i": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "id": "subbase_${i}",
+        "type": "subbase",
+        "label": "Sub ${i}",
+        "block": "Subbase (${i})",
+        "x": {
+          "counter": "i",
+          "range": [
+            640,
+            930
+          ]
+        },
+        "y": 160,
+        "width": 28,
+        "height": 35,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "Subbase (${i})",
+            "property": "Storage"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.4,
+            "color": "#BFDBFE"
+          },
+          {
+            "below": 0.8,
+            "color": "#3B82F6"
+          },
+          {
+            "above": 0.8,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 2,
+            "fill": "#E2E8F0",
+            "stroke": "#475569",
+            "stroke_width": 0.35
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "r": {
+          "range": [
+            1,
+            8
+          ]
+        },
+        "c": {
+          "range": [
+            1,
+            6
+          ]
+        }
+      },
+      "template": {
+        "id": "lefttop_${r}_${c}",
+        "type": "left_top_soil",
+        "label": "LT ${r},${c}",
+        "block": "LeftTop (${r}$${c})",
+        "x": {
+          "counter": "c",
+          "range": [
+            245,
+            425
+          ]
+        },
+        "y": {
+          "counter": "r",
+          "range": [
+            135,
+            280
+          ]
+        },
+        "width": 26,
+        "height": 15,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "LeftTop (${r}$${c})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "r": {
+          "range": [
+            2,
+            8
+          ]
+        },
+        "c": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "id": "righttop_${r}_${c}",
+        "type": "right_top_soil",
+        "label": "RT ${r},${c}",
+        "block": "RightTop (${r}$${c})",
+        "x": {
+          "counter": "c",
+          "range": [
+            660,
+            1010
+          ]
+        },
+        "y": {
+          "counter": "r",
+          "range": [
+            150,
+            280
+          ]
+        },
+        "width": 26,
+        "height": 15,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "RightTop (${r}$${c})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.25
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "r": {
+          "range": [
+            9,
+            31
+          ]
+        },
+        "c": {
+          "range": [
+            1,
+            6
+          ]
+        }
+      },
+      "template": {
+        "id": "leftbottom_${r}_${c}",
+        "type": "left_bottom_soil",
+        "label": "LB ${r},${c}",
+        "block": "LeftBottom (${r}$${c})",
+        "x": {
+          "counter": "c",
+          "range": [
+            245,
+            425
+          ]
+        },
+        "y": {
+          "counter": "r",
+          "range": [
+            305,
+            790
+          ]
+        },
+        "width": 26,
+        "height": 13,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "LeftBottom (${r}$${c})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.22
+          }
+        ]
+      }
+    },
+    {
+      "counters": {
+        "r": {
+          "range": [
+            9,
+            31
+          ]
+        },
+        "c": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "id": "rightbottom_${r}_${c}",
+        "type": "right_bottom_soil",
+        "label": "RB ${r},${c}",
+        "block": "RightBottom (${r}$${c})",
+        "x": {
+          "counter": "c",
+          "range": [
+            660,
+            1010
+          ]
+        },
+        "y": {
+          "counter": "r",
+          "range": [
+            305,
+            790
+          ]
+        },
+        "width": 26,
+        "height": 13,
+        "fill_max": 1,
+        "bind": {
+          "fill_value": {
+            "block": "RightBottom (${r}$${c})",
+            "property": "theta"
+          }
+        },
+        "thresholds": [
+          {
+            "below": 0.15,
+            "color": "#FEF3C7"
+          },
+          {
+            "below": 0.3,
+            "color": "#93C5FD"
+          },
+          {
+            "above": 0.3,
+            "color": "#1D4ED8"
+          }
+        ],
+        "draw": [
+          {
+            "shape": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "rx": 1,
+            "fill": {
+              "bind": "water_color"
+            },
+            "stroke": "#64748B",
+            "stroke_width": 0.22
+          }
+        ]
+      }
+    }
+  ],
+  "connectors": [
+    {
+      "link": "Catchment (1) - EngineeredSoil (1)",
+      "from": "Catchment (1)",
+      "to": "EngineeredSoil (1)",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "Catchment (1) - EngineeredSoil (1)",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "EngineeredSoil-Subbase",
+      "from": "EngineeredSoil (1)",
+      "to": "Subbase (1)",
+      "attach": "auto",
+      "style": "arrow",
+      "bind": {
+        "flow_value": {
+          "link": "EngineeredSoil-Subbase",
+          "property": "flow"
+        }
+      }
+    },
+    {
+      "link": "UEngineered - GW",
+      "from": "UEngineered (31)",
+      "to": "GW",
+      "attach": "auto",
+      "style": "line",
+      "bind": {
+        "flow_value": {
+          "link": "UEngineered - GW",
+          "property": "flow"
+        }
+      }
+    }
+  ],
+  "repeat_connectors": [
+    {
+      "counters": {
+        "i": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "link": "Subbase (${i}) - RightTop (2$${i})",
+        "from": "Subbase (${i})",
+        "to": "RightTop (2$${i})",
+        "attach": "auto",
+        "style": "line",
+        "bind": {
+          "flow_value": {
+            "link": "Subbase (${i}) - RightTop (2$${i})",
+            "property": "flow"
+          }
+        }
+      }
+    },
+    {
+      "counters": {
+        "i": {
+          "range": [
+            1,
+            6
+          ]
+        }
+      },
+      "template": {
+        "link": "LeftBottom - GW (${i})",
+        "from": "LeftBottom (31$${i})",
+        "to": "GW",
+        "attach": "auto",
+        "style": "line",
+        "bind": {
+          "flow_value": {
+            "link": "LeftBottom - GW (${i})",
+            "property": "flow"
+          }
+        }
+      }
+    },
+    {
+      "counters": {
+        "i": {
+          "range": [
+            1,
+            10
+          ]
+        }
+      },
+      "template": {
+        "link": "RightBottom - GW (${i})",
+        "from": "RightBottom (31$${i})",
+        "to": "GW",
+        "attach": "auto",
+        "style": "line",
+        "bind": {
+          "flow_value": {
+            "link": "RightBottom - GW (${i})",
+            "property": "flow"
+          }
+        }
+      }
+    }
+  ]
+}
