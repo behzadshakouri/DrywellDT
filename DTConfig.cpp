@@ -319,10 +319,6 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     // ------------------------------------------------------------------
     // Defaults: disabled. The block being absent means the forward twin
     // does not poll any source and does not run calibration.
-    assimilation.enabled        = false;
-    assimilation.truthCsvUrl.clear();
-    assimilation.truthMetaUrl.clear();
-    assimilation.pollIntervalMs = 0;
 
     if (root.contains("assimilation"))
     {
@@ -360,10 +356,18 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
 
         assimilation.enabled        = true;
         assimilation.truthCsvUrl    = csvQ.toStdString();
-        assimilation.truthMetaUrl   = metaQ.toStdString(); // empty allowed
+        assimilation.truthMetaUrl   = metaQ.toStdString();
         assimilation.pollIntervalMs = pollMs;
-    }
 
+        // calibration_output_dir (optional; defaults to "outputs/calibration"
+        // under the deployment root). Resolved against deploymentRoot the
+        // same way other deployment-relative paths are.
+        const QString calDirQ =
+            as.value("calibration_output_dir").toString().trimmed();
+        const QString calDirResolved = resolvePath(
+            calDirQ.isEmpty() ? "outputs/calibration" : calDirQ);
+        assimilation.calibrationOutputDir = calDirResolved.toStdString();
+    }
     // ------------------------------------------------------------------
     // Auto-derived working directories under the deployment root
     // ------------------------------------------------------------------
@@ -453,5 +457,47 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         std::cout << "[Config] assimilation      : disabled\n";
     }
 
+    return true;
+}
+
+// Static helper. Erases the *contents* of dirPath but leaves dirPath itself
+// in place. Returns false on the first I/O error encountered. Best-effort
+// deletion — partial cleanup is possible if a file can't be removed.
+// ---------------------------------------------------------------------------
+// DTConfig::eraseDirectoryContents
+// Erases all files and subdirectories inside dirPath, but leaves dirPath
+// itself in place. Symlinks are removed (not their targets).
+// ---------------------------------------------------------------------------
+bool DTConfig::eraseDirectoryContents(const QString &dirPath, QString &err)
+{
+    QDir dir(dirPath);
+    if (!dir.exists()) return true;   // nothing to erase
+
+    const QFileInfoList entries = dir.entryInfoList(
+        QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden,
+        QDir::Name);
+
+    for (const QFileInfo &entry : entries)
+    {
+        const QString path = entry.absoluteFilePath();
+
+        if (entry.isDir() && !entry.isSymLink())
+        {
+            QDir sub(path);
+            if (!sub.removeRecursively())
+            {
+                err = "failed to remove subdirectory: " + path;
+                return false;
+            }
+        }
+        else
+        {
+            if (!QFile::remove(path))
+            {
+                err = "failed to remove: " + path;
+                return false;
+            }
+        }
+    }
     return true;
 }

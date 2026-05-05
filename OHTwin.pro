@@ -128,6 +128,7 @@ SOURCES += \
     DTConfig.cpp \
     DTObservationBuffer.cpp \
     DTRunner.cpp \
+    DTWeather.cpp \
     VizRenderer.cpp \
     main.cpp \
     noaaweatherfetcher.cpp
@@ -194,6 +195,7 @@ HEADERS += \
     DTConfig.h \
     DTObservationBuffer.h \
     DTRunner.h \
+    DTWeather.h \
     VizRenderer.h \
     noaaweatherfetcher.h
 

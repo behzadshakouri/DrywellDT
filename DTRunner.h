@@ -97,6 +97,8 @@ public slots:
     // viz_*.json layout.
     bool renderOnly();
 
+    void onCalibrationCompleted(QString newSnapshotPath);
+
 private:
     // -----------------------------------------------------------------------
     // Internal helpers
@@ -224,6 +226,8 @@ private:
     // DTRunner.h's transitive include set and avoids constructing the
     // QTimer-driven assimilation manager when assimilation is disabled.
     std::unique_ptr<DTAssimilation> m_assimilation;
+
+    QString m_pendingCalibratedSnapshot;
 };
 
 

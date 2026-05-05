@@ -50,6 +50,9 @@ public:
     // refresh() result.
     bool refreshNow();
 
+    void setLatestSnapshot(const QString &path) { m_latestSnapshotPath = path; }
+
+
 signals:
     // Emitted after each successful poll. Carries the number of points
     // currently held in the buffer for quick logging/diagnostics.
@@ -59,6 +62,9 @@ signals:
     // log; the timer keeps running.
     void pollFailed(QString errorMessage);
 
+    void calibrationCompleted(QString newSnapshotPath);
+    void calibrationFailed(QString errorMessage);
+
 private slots:
     void onPollTick();
 
@@ -67,4 +73,8 @@ private:
     DTObservationBuffer   m_buffer;
     QTimer                m_pollTimer;
     bool                  m_started = false;
+    int m_cyclesCompleted = 0;
+    bool runCalibration(QString &errorMessage);
+    bool archiveGAOutput(int cycleIndex);
+    QString m_latestSnapshotPath;
 };

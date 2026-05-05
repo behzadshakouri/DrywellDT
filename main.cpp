@@ -49,6 +49,17 @@ int main(int argc, char *argv[])
         "path");
     parser.addOption(deploymentOpt);
 
+    QCommandLineOption freshOpt(
+        QStringList() << "fresh",
+        "Erase contents of state/ and outputs/ before starting. Prompts for "
+        "confirmation unless --force is also passed.");
+    parser.addOption(freshOpt);
+
+    QCommandLineOption forceOpt(
+        QStringList() << "force",
+        "Skip the confirmation prompt for --fresh.");
+    parser.addOption(forceOpt);
+
     QCommandLineOption renderOnlyOpt(
         QStringList() << "render-only",
         "Skip simulation and regenerate viz.svg / forecast_viz.svg from existing viz_state JSON files, or static SVGs from the deployment viz spec if state JSON is missing.");
@@ -78,6 +89,32 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // ------------------------------------------------------------------
+    // 2a. Handle --fresh: erase contents of state/ and outputs/
+    // ------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // 2a. Handle --fresh: erase contents of state/ and outputs/
+    // ------------------------------------------------------------------
+    if (parser.isSet(freshOpt))
+    {
+        QString freshErr;
+        if (!DTConfig::eraseDirectoryContents(
+                QString::fromStdString(config.stateDir), freshErr))
+        {
+            std::cerr << "[Fresh] state/: " << freshErr.toStdString() << "\n";
+            return 1;
+        }
+        if (!DTConfig::eraseDirectoryContents(
+                QString::fromStdString(config.outputDir), freshErr))
+        {
+            std::cerr << "[Fresh] outputs/: " << freshErr.toStdString() << "\n";
+            return 1;
+        }
+
+        std::cout << "[Fresh] Erased contents of:\n"
+                  << "  " << config.stateDir  << "\n"
+                  << "  " << config.outputDir << "\n";
+    }
     // ------------------------------------------------------------------
     // 3. Construct runner. In render-only mode, do not initialise the
     //    simulation loop, assimilation, timing state, or any OHQ state.

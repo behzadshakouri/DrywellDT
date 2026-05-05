@@ -62,6 +62,7 @@ struct AssimilationConfig
     std::string truthCsvUrl;
     std::string truthMetaUrl;
     qint64      pollIntervalMs = 0;
+    std::string calibrationOutputDir;          // resolved absolute path to calibration outputs
 };
 
 // ---------------------------------------------------------------------------
@@ -155,6 +156,8 @@ public:
     // not initialized at all.
     AssimilationConfig assimilation;
 
+
+    static bool eraseDirectoryContents(const QString &dirPath, QString &err);
 private:
     // Parse "300s", "15min", "4hr", "1day" -> milliseconds.
     // Returns -1 on parse error and writes details into err.
@@ -165,3 +168,5 @@ private:
     // Empty input returns empty.
     QString resolvePath(const QString &p) const;
 };
+
+

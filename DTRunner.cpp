@@ -15,6 +15,7 @@
 #include <memory>
 #include <random>
 #include "VizRenderer.h"
+#include "DTWeather.h"
 
 // ---------------------------------------------------------------------------
 // OHQ epoch: day-serial 0 = 1899-12-30 (Excel convention)
@@ -86,6 +87,14 @@ bool DTRunner::init(QString &errorMessage)
                            QString::fromStdString(m_config.scriptFile);
             return false;
         }
+    }
+
+    if (m_assimilation)
+    {
+        QObject::connect(m_assimilation.get(),
+                         &DTAssimilation::calibrationCompleted,
+                         this,
+                         &DTRunner::onCalibrationCompleted);
     }
 
     // Determine the wall-clock start time for the first interval
@@ -260,11 +269,24 @@ bool DTRunner::runOnce()
 
     std::cout << "\n[Runner] ======== Cycle " << (m_runsCompleted + 1) << " ========\n";
 
-    // ------------------------------------------------------------------
-    // Build / locate the initial-condition JSON used by BOTH stages.
-    // (Stages run independently from the same starting state.)
-    // ------------------------------------------------------------------
-    const QString latestSnapshot = findLatestStateSnapshot();
+
+    // Determine the snapshot to load for this cycle. A calibration that
+    // completed since the previous cycle takes precedence over the
+    // latest forward snapshot, since its parameters are more current.
+    QString latestSnapshot;
+    if (!m_pendingCalibratedSnapshot.isEmpty() &&
+        QFileInfo::exists(m_pendingCalibratedSnapshot))
+    {
+        latestSnapshot = m_pendingCalibratedSnapshot;
+        std::cout << "[Runner] consuming calibrated snapshot: "
+                  << m_pendingCalibratedSnapshot.toStdString() << "\n";
+        m_pendingCalibratedSnapshot.clear();
+    }
+    else
+    {
+        latestSnapshot = findLatestStateSnapshot();
+    }
+
     QString initialModelJsonPath;
 
     if (!latestSnapshot.isEmpty())
@@ -305,6 +327,14 @@ bool DTRunner::runOnce()
     {
         std::cerr << "[Runner] Advance stage failed.\n";
         return false;
+    }
+
+    // Hand the freshly-written state snapshot to the assimilation manager
+    // so its next calibration cycle has a System to load. No-op when
+    // assimilation is disabled.
+    if (m_assimilation && !advance.stateSnapshotPath.isEmpty())
+    {
+        m_assimilation->setLatestSnapshot(advance.stateSnapshotPath);
     }
 
     // ------------------------------------------------------------------
@@ -517,7 +547,12 @@ StageResult DTRunner::runStage(StageKind kind,
 
 
     // Precipitation (clamped to this stage's window inside fetchPrecipitation)
-    CPrecipitation precip = fetchPrecipitation(stageStart, stageEnd);
+    CPrecipitation precip = DTWeather::fetchPrecipitation(
+        m_config.weatherSource,
+        m_config.latitude,
+        m_config.longitude,
+        stageStart, stageEnd);
+
     {
         const QString precipFile =
             QString::fromStdString(m_config.outputDir) + "/" +
@@ -525,7 +560,7 @@ StageResult DTRunner::runStage(StageKind kind,
             (isAdvance ? "advance" : "forecast") + "_precipitation.txt";
         precip.writefile(precipFile.toStdString());
     }
-    injectPrecipitation(ohqSystem.get(), precip);
+    DTWeather::injectPrecipitation(ohqSystem.get(), precip);
     ohqSystem->CalcAllInitialValues();
     std::cout << "[Runner] Solving...\n";
     ohqSystem->Solve();
@@ -1041,4 +1076,11 @@ bool DTRunner::writeMetadataSidecar() const
         QString::fromStdString(m_config.outputDir) + "/selected_output_meta.json";
 
     return writeJson(root, path);
+}
+
+void DTRunner::onCalibrationCompleted(QString newSnapshotPath)
+{
+    m_pendingCalibratedSnapshot = newSnapshotPath;
+    std::cout << "[Runner] calibrated snapshot received, will use on next cycle: "
+              << newSnapshotPath.toStdString() << "\n";
 }
