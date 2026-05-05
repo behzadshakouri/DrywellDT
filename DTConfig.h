@@ -78,12 +78,11 @@ struct ObservationConfig
 // ---------------------------------------------------------------------------
 struct AssimilationConfig
 {
-    bool        enabled                = false;   // true iff "assimilation" block present
+    bool        enabled        = false;        // true iff "assimilation" block present
     std::string truthCsvUrl;
     std::string truthMetaUrl;
-    qint64      pollIntervalMs         = 0;       // (kept for backward compat — see note)
-    qint64      calibrationIntervalMs  = 0;       // drives refresh+calibrate cadence
-    std::string calibrationOutputDir;             // e.g. "outputs/calibration"
+    qint64      pollIntervalMs = 0;
+    std::string calibrationOutputDir;          // resolved absolute path to calibration outputs
 };
 
 // ---------------------------------------------------------------------------

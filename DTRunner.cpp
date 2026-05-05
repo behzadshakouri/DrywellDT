@@ -173,20 +173,12 @@ bool DTRunner::init(QString &errorMessage)
         // Diagnostic logging on poll outcomes.
         QObject::connect(m_assimilation.get(), &DTAssimilation::buffered,
                          this, [](qint64 n) {
-                             std::cout << "[Assim] poll OK — " << n << " points buffered\n";
-                         });
+            std::cout << "[Assim] poll OK — " << n << " points buffered\n";
+        });
         QObject::connect(m_assimilation.get(), &DTAssimilation::pollFailed,
                          this, [](const QString &err) {
-                             std::cerr << "[Assim] poll failed: " << err.toStdString() << "\n";
-                         });
-
-        // Calibration outcome handlers.
-        QObject::connect(m_assimilation.get(), &DTAssimilation::calibrationCompleted,
-                         this, &DTRunner::onCalibrationCompleted);
-        QObject::connect(m_assimilation.get(), &DTAssimilation::calibrationFailed,
-                         this, [](const QString &err) {
-                             std::cerr << "[Assim] calibration failed: " << err.toStdString() << "\n";
-                         });
+            std::cerr << "[Assim] poll failed: " << err.toStdString() << "\n";
+        });
 
         QString assimErr;
         if (!m_assimilation->start(assimErr))
@@ -288,21 +280,6 @@ bool DTRunner::renderOnly()
 }
 
 // ---------------------------------------------------------------------------
-// onCalibrationCompleted
-// Receives the calibrated snapshot path from DTAssimilation and stores it
-// for the next runOnce() to consume. Logged at INFO level for traceability.
-// ---------------------------------------------------------------------------
-void DTRunner::onCalibrationCompleted(QString newSnapshotPath)
-{
-    m_pendingCalibratedSnapshot = newSnapshotPath;
-    std::cout << "[Runner] Calibrated snapshot received: "
-              << newSnapshotPath.toStdString()
-              << "  (will be used as initial condition for next cycle)\n";
-}
-
-
-
-// ---------------------------------------------------------------------------
 // runOnce  (orchestrator: Advance, then optional Forecast)
 // ---------------------------------------------------------------------------
 bool DTRunner::runOnce()
@@ -332,13 +309,13 @@ bool DTRunner::runOnce()
 
     QString initialModelJsonPath;
 
-    if (!sourceSnapshot.isEmpty())
+    if (!latestSnapshot.isEmpty())
     {
-        QJsonObject prevState = readJson(sourceSnapshot);
+        QJsonObject prevState = readJson(latestSnapshot);
         if (prevState.isEmpty())
         {
-            std::cerr << "[Runner] Failed to read " << sourceLabel << ": "
-                      << sourceSnapshot.toStdString() << "\n";
+            std::cerr << "[Runner] Failed to read previous state: "
+                      << latestSnapshot.toStdString() << "\n";
             return false;
         }
 
@@ -351,8 +328,7 @@ bool DTRunner::runOnce()
             std::cerr << "[Runner] Failed to write base initial-condition state\n";
             return false;
         }
-        std::cout << "[Runner] Initial condition (" << sourceLabel << "): "
-                  << sourceSnapshot.toStdString() << "\n";
+        std::cout << "[Runner] Initial condition: " << latestSnapshot.toStdString() << "\n";
     }
     else
     {
@@ -360,6 +336,7 @@ bool DTRunner::runOnce()
                   << m_config.scriptFile << "\n";
         // initialModelJsonPath stays empty → runStage() cold-starts from script
     }
+
     // ------------------------------------------------------------------
     // Stage A — Advance [t, t+Δ]
     // ------------------------------------------------------------------

@@ -117,9 +117,6 @@ public slots:
     // viz_*.json layout.
     bool renderOnly();
 
-    // Receives the path to a calibrated state snapshot from DTAssimilation.
-    // Stores it in m_pendingCalibratedSnapshot so the next runOnce() can
-    // use it as the initial condition.
     void onCalibrationCompleted(QString newSnapshotPath);
 
 private:
@@ -249,6 +246,8 @@ private:
     // DTRunner.h's transitive include set and avoids constructing the
     // QTimer-driven assimilation manager when assimilation is disabled.
     std::unique_ptr<DTAssimilation> m_assimilation;
+
+    QString m_pendingCalibratedSnapshot;
 };
 
 
