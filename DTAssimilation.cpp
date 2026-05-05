@@ -17,33 +17,41 @@
 #include <QDateTime>
 #include <iostream>
 
+// ---------------------------------------------------------------------------
+// Constructor
+// ---------------------------------------------------------------------------
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
-    : QObject(parent)
-    , m_config(config)
+    : QObject(parent), m_config(config)
 {
-    m_pollTimer.setSingleShot(false);
-    connect(&m_pollTimer, &QTimer::timeout,
-            this,         &DTAssimilation::onPollTick);
+    m_cycleTimer.setSingleShot(false);
+    connect(&m_cycleTimer, &QTimer::timeout, this, &DTAssimilation::onCycleTick);
 }
 
+// ---------------------------------------------------------------------------
+// start
+// ---------------------------------------------------------------------------
 bool DTAssimilation::start(QString &errorMessage)
 {
-    if (!m_config.assimilation.enabled)
-    {
-        errorMessage = "DTAssimilation::start(): assimilation block is "
-                       "disabled in config (this is a programmer error — "
-                       "DTRunner shouldn't construct DTAssimilation when "
-                       "the block is absent).";
+    if (m_started) return true;
+
+    if (m_config.assimilation.truthCsvUrl.empty()) {
+        errorMessage = "DTAssimilation::start: truthCsvUrl is empty";
         return false;
     }
-    if (m_config.assimilation.truthCsvUrl.empty())
-    {
-        errorMessage = "DTAssimilation::start(): truth_csv_url is empty";
+    if (m_config.assimilation.calibrationIntervalMs <= 0) {
+        errorMessage = "DTAssimilation::start: calibrationIntervalMs must be > 0";
         return false;
     }
-    if (m_config.assimilation.pollIntervalMs <= 0)
-    {
-        errorMessage = "DTAssimilation::start(): poll_interval must be > 0";
+    if (m_config.assimilation.calibrationOutputDir.empty()) {
+        errorMessage = "DTAssimilation::start: calibrationOutputDir is empty";
+        return false;
+    }
+
+    // Ensure the calibration output directory exists.
+    QDir dir;
+    if (!dir.mkpath(QString::fromStdString(m_config.assimilation.calibrationOutputDir))) {
+        errorMessage = "DTAssimilation::start: failed to create "
+                       + QString::fromStdString(m_config.assimilation.calibrationOutputDir);
         return false;
     }
 
@@ -90,18 +98,31 @@ bool DTAssimilation::start(QString &errorMessage)
 
 }
 
+// ---------------------------------------------------------------------------
+// stop
+// ---------------------------------------------------------------------------
 void DTAssimilation::stop()
 {
-    if (m_pollTimer.isActive()) m_pollTimer.stop();
+    m_cycleTimer.stop();
     m_started = false;
 }
 
-bool DTAssimilation::refreshNow()
+// ---------------------------------------------------------------------------
+// onCycleTick — timer slot, fires every calibrationIntervalMs
+// ---------------------------------------------------------------------------
+void DTAssimilation::onCycleTick()
 {
-    return m_buffer.refresh();
+    QString errorMessage;
+    if (!doCycle(errorMessage)) {
+        // doCycle has already emitted the appropriate signal.
+        // Nothing to do here; next tick will try again.
+    }
 }
 
-void DTAssimilation::onPollTick()
+// ---------------------------------------------------------------------------
+// refreshAndCalibrateNow — manual trigger
+// ---------------------------------------------------------------------------
+bool DTAssimilation::refreshAndCalibrateNow(QString &errorMessage)
 {
     if (!m_buffer.refresh())
     {
