@@ -86,3 +86,7 @@ build-qmake/bin/
 build-qmake/moc/
 
 build-qmake/obj/
+
+viewer/build/WebAssembly_Qt_6_8_3_multi_threaded-Debug/.qtc_clangd/
+
+viewer/build/WebAssembly_Qt_6_8_3_multi_threaded-Release/
