@@ -83,6 +83,9 @@ struct AssimilationConfig
     std::string truthMetaUrl;
     qint64      pollIntervalMs = 0;
     std::string calibrationOutputDir;          // resolved absolute path to calibration outputs
+    // Names of observations to use in GA misfit. Empty => use all
+    // observations matched in the buffer (backward-compatible).
+    std::vector<std::string> calibrationObservations;
 };
 
 // ---------------------------------------------------------------------------

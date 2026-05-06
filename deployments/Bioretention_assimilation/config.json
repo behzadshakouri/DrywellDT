@@ -26,6 +26,11 @@
         "truth_csv_url": "http://localhost:8084/outputs/selected_output.csv",
         "truth_meta_url": "http://localhost:8084/outputs/selected_output_meta.json",
         "poll_interval": "3day",
-        "calibration_output_dir": "outputs/calibration"
+        "calibration_output_dir": "outputs/calibration",
+        "calibration_observations": [
+		"Underdrain flow (m3/day)",
+		"Soil Moisture",
+		"Pond water depth (m)"
+    	]
     }
 }

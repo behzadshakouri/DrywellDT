@@ -387,6 +387,16 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         const QString calDirResolved = resolvePath(
             calDirQ.isEmpty() ? "outputs/calibration" : calDirQ);
         assimilation.calibrationOutputDir = calDirResolved.toStdString();
+
+        if (as.contains("calibration_observations") &&
+            as["calibration_observations"].isArray())
+        {
+            const QJsonArray arr = as["calibration_observations"].toArray();
+            for (const QJsonValue &v : arr)
+                if (v.isString())
+                    assimilation.calibrationObservations
+                        .push_back(v.toString().toStdString());
+        }
     }
     // ------------------------------------------------------------------
     // Auto-derived working directories under the deployment root
@@ -479,6 +489,17 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
 
     std::cout << "[Config] advance_to_obs   : "
               << (advanceToObservations ? "true" : "false") << "\n";
+
+    if (assimilation.enabled)
+    {
+        std::cout << "[Config] calibration_obs : ";
+        if (assimilation.calibrationObservations.empty())
+            std::cout << "(all matched)";
+        else
+            for (const auto &name : assimilation.calibrationObservations)
+                std::cout << "'" << name << "' ";
+        std::cout << "\n";
+    }
 
     return true;
 }

@@ -208,12 +208,29 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
         return false;
     }
 
-    // 3. Push buffered observations into matching System Observations.
+    // 3. Push buffered observations into the System Observations selected
+    //    for calibration. If the config's calibration_observations list is
+    //    empty, fall back to "use all matched" (backward-compatible).
+    //    Observations not in the list have no observed_data set, so they
+    //    contribute zero to the GA misfit but still get simulated and
+    //    written to outputs for client-side visualization.
+    const auto &selected = m_config.assimilation.calibrationObservations;
+    const bool useAll = selected.empty();
+
     int matched = 0;
+    int skipped = 0;
     for (unsigned int i = 0; i < sys.ObservationsCount(); ++i)
     {
         Observation *obs = sys.observation(i);
         const std::string name = obs->GetName();
+
+        if (!useAll &&
+            std::find(selected.begin(), selected.end(), name) == selected.end())
+        {
+            ++skipped;
+            continue;
+        }
+
         TimeSeries<double> series = m_buffer.series(name);
         if (series.size() == 0) continue;
         obs->Variable("observed_data")->SetTimeSeries(series);
@@ -221,11 +238,14 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     }
     if (matched == 0)
     {
-        errorMessage = "no buffered observations matched any System Observation by name";
+        errorMessage = "no buffered observations matched any selected "
+                       "Observation by name";
         return false;
     }
     std::cout << "[Assim] pushed observed_data into " << matched
-              << " observation(s)\n";
+              << " observation(s)";
+    if (!useAll) std::cout << " (skipped " << skipped << " not in calibration list)";
+    std::cout << "\n";
 
     // 4. Standard inverse-run prep (mirrors oninverserun).
     // ===== ADD THIS BLOCK HERE =====

@@ -94,3 +94,13 @@ viewer/build/WebAssembly_Qt_6_8_3_multi_threaded-Release/
 build-wasm-viewer/
 
 viewer/build/release/
+
+deployments/Bioretention_assimilation/model/errors.txt
+
+deployments/Bioretention_assimilation/model/fit_measures.txt
+
+deployments/Bioretention_assimilation/model/Objective_Function_TimeSeries.txt
+
+deployments/Bioretention_assimilation/model/objective_function_values.txt
+
+deployments/Bioretention_assimilation/model/observedoutput.txt
