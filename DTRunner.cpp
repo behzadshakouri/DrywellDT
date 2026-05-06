@@ -36,6 +36,7 @@
 #include <random>
 #include "VizRenderer.h"
 #include "DTWeather.h"
+#include <QThread>
 
 // ---------------------------------------------------------------------------
 // OHQ epoch: day-serial 0 = 1899-12-30 (Excel convention)
@@ -86,7 +87,14 @@ DTRunner::DTRunner(const DTConfig &config, QObject *parent)
 // Out-of-line destructor: required so that unique_ptr<DTAssimilation>'s
 // destruction can see the full DTAssimilation type (declared via the
 // #include at the top of this file).
-DTRunner::~DTRunner() = default;
+DTRunner::~DTRunner()
+{
+    if (m_assimThread)
+    {
+        m_assimThread->quit();
+        m_assimThread->wait();
+    }
+}
 
 // ---------------------------------------------------------------------------
 // init
@@ -109,14 +117,6 @@ bool DTRunner::init(QString &errorMessage)
         }
     }
 
-    if (m_assimilation)
-    {
-        QObject::connect(m_assimilation.get(),
-                         &DTAssimilation::calibrationCompleted,
-                         this,
-                         &DTRunner::onCalibrationCompleted);
-    }
-
     // Determine the wall-clock start time for the first interval
     if (!m_config.startDatetime.empty())
     {
@@ -128,7 +128,7 @@ bool DTRunner::init(QString &errorMessage)
                            QString::fromStdString(m_config.startDatetime);
             return false;
         }
-        m_nextIntervalStart.setTimeSpec(Qt::UTC);   // <-- ADD THIS
+        m_nextIntervalStart.setTimeSpec(Qt::UTC);
         std::cout << "[Runner] Using config start_datetime: "
                   << m_config.startDatetime << "\n";
     }
@@ -165,27 +165,81 @@ bool DTRunner::init(QString &errorMessage)
     // block is present in config.json. Failure here is fatal: we don't
     // want to silently run a forward-only twin when the operator
     // explicitly configured assimilation.
+    //
+    // The assimilation object is moved to its own QThread so that long
+    // GA cycles don't block the forward loop's QTimer events on the
+    // main thread.  Snapshot handoff in both directions uses signal/slot
+    // connections, which become QueuedConnection automatically across
+    // threads — preserving Qt's invariant that a slot only runs on the
+    // thread its owning QObject lives on.
     // ------------------------------------------------------------------
     if (m_config.assimilation.enabled)
     {
-        m_assimilation.reset(new DTAssimilation(m_config, this));
+        // Construct on the main thread with parent=nullptr.  A QObject with
+        // a parent cannot be moved to another thread, so we keep parentage
+        // off and rely on unique_ptr for lifetime.
+        m_assimilation.reset(new DTAssimilation(m_config, nullptr));
 
-        // Diagnostic logging on poll outcomes.
-        QObject::connect(m_assimilation.get(), &DTAssimilation::buffered,
-                         this, [](qint64 n) {
-            std::cout << "[Assim] poll OK — " << n << " points buffered\n";
-        });
-        QObject::connect(m_assimilation.get(), &DTAssimilation::pollFailed,
-                         this, [](const QString &err) {
-            std::cerr << "[Assim] poll failed: " << err.toStdString() << "\n";
-        });
-
+        // Validate config and perform the initial buffer refresh on the
+        // main thread.  Must happen before moveToThread() so that any
+        // configuration error fails fast at startup.
         QString assimErr;
-        if (!m_assimilation->start(assimErr))
+        if (!m_assimilation->configure(assimErr))
         {
-            errorMessage = "DTAssimilation::start() failed: " + assimErr;
+            errorMessage = "DTAssimilation::configure() failed: " + assimErr;
             return false;
         }
+
+        // Diagnostic logging on poll outcomes.  Cross-thread signals
+        // become QueuedConnection automatically, so these lambda bodies
+        // run on the main thread — safe to use std::cout/std::cerr.
+        QObject::connect(m_assimilation.get(), &DTAssimilation::buffered,
+                         this, [](qint64 n) {
+                             std::cout << "[Assim] poll OK — " << n << " points buffered\n";
+                         });
+        QObject::connect(m_assimilation.get(), &DTAssimilation::pollFailed,
+                         this, [](const QString &err) {
+                             std::cerr << "[Assim] poll failed: " << err.toStdString() << "\n";
+                         });
+
+        // Calibration result handoff: assim thread → main thread (queued).
+        // The slot writes m_pendingCalibratedSnapshot, which is read at
+        // the top of the next runOnce() on the main thread.
+        QObject::connect(m_assimilation.get(),
+                         &DTAssimilation::calibrationCompleted,
+                         this,
+                         &DTRunner::onCalibrationCompleted);
+
+        // Forward → assim snapshot handoff: main thread → assim thread
+        // (queued).  Replaces the former direct setLatestSnapshot() call
+        // at the end of runOnce().
+        QObject::connect(this, &DTRunner::snapshotReady,
+                         m_assimilation.get(),
+                         &DTAssimilation::setLatestSnapshot);
+
+        // Move the assimilation object to its own thread.  The QTimer
+        // owned by m_assimilation moves with it (it's a value member).
+        // The QThread itself is parented to *this* so it's destroyed
+        // when DTRunner is; ~DTRunner() calls quit()/wait() on it before
+        // m_assimilation is destroyed via unique_ptr.
+        m_assimThread = new QThread(this);
+        m_assimilation->moveToThread(m_assimThread);
+
+        // Once the thread's event loop is running, start the poll timer
+        // on that thread.  Cannot start the timer earlier because QTimer
+        // must be started from the thread it lives on.
+        QObject::connect(m_assimThread, &QThread::started,
+                         m_assimilation.get(),
+                         &DTAssimilation::startTimer,
+                         Qt::QueuedConnection);
+
+        // Symmetric shutdown: stop the timer when the thread is asked
+        // to quit (before the event loop exits).
+        QObject::connect(m_assimThread, &QThread::finished,
+                         m_assimilation.get(),
+                         &DTAssimilation::stopTimer);
+
+        m_assimThread->start();
     }
     else
     {
@@ -289,9 +343,9 @@ bool DTRunner::runOnce()
 
     if (m_config.advanceToObservations &&
         m_assimilation &&
-        m_assimilation->buffer().pointCount() > 0)
+        m_assimilation->bufferPointCount() > 0)
     {
-        const double tMaxSerial = m_assimilation->buffer().tMax();
+        const double tMaxSerial = m_assimilation->bufferTMax();
         const QDateTime tMaxDt  = fromOHQDaySerial(tMaxSerial);
 
         if (tMaxDt > advanceStart)
@@ -402,12 +456,14 @@ bool DTRunner::runOnce()
         return false;
     }
 
-    // Hand the freshly-written state snapshot to the assimilation manager
-    // so its next calibration cycle has a System to load. No-op when
-    // assimilation is disabled.
+    // Hand the freshly-written state snapshot to the assimilation thread
+    // so its next calibration cycle has a System to load. The connection
+    // is QueuedConnection across threads (see DTRunner::init()), so this
+    // emit returns immediately and the assim thread picks the path up
+    // through its own event loop. No-op when assimilation is disabled.
     if (m_assimilation && !advance.stateSnapshotPath.isEmpty())
     {
-        m_assimilation->setLatestSnapshot(advance.stateSnapshotPath);
+        emit snapshotReady(advance.stateSnapshotPath);
     }
 
     // ------------------------------------------------------------------
@@ -1163,7 +1219,7 @@ void DTRunner::onCalibrationCompleted(QString newSnapshotPath)
               << "[Runner] (will consume on next forward cycle)\n";
 }
 
-static QDateTime fromOHQDaySerial(double serial)
+QDateTime fromOHQDaySerial(double serial)
 {
     const qint64 ms = static_cast<qint64>((serial - 25569.0) * 86400000.0);
     return QDateTime::fromMSecsSinceEpoch(ms, Qt::UTC);

@@ -36,21 +36,35 @@
 #include "DTWeather.h"
 #include <QDateTime>
 #include <iostream>
+#include <QThread>
 
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
     : QObject(parent)
     , m_config(config)
 {
+    m_pollTimer.setParent(this);
     m_pollTimer.setSingleShot(false);
+    // The timer is parented to *this* (it's a value member). When this
+    // object is moveToThread()'d to the assimilation thread, the timer
+    // moves with it. startTimer() will then be called on that thread
+    // via a queued connection from QThread::started.
     connect(&m_pollTimer, &QTimer::timeout,
             this,         &DTAssimilation::onPollTick);
 }
 
-bool DTAssimilation::start(QString &errorMessage)
+
+// ---------------------------------------------------------------------------
+// configure
+// Validate config, install endpoints, perform the initial buffer refresh,
+// and compute the wall-clock poll interval. Must run on the main thread
+// before moveToThread().  Does NOT start the timer — startTimer() does
+// that, and must run on the assimilation thread.
+// ---------------------------------------------------------------------------
+bool DTAssimilation::configure(QString &errorMessage)
 {
     if (!m_config.assimilation.enabled)
     {
-        errorMessage = "DTAssimilation::start(): assimilation block is "
+        errorMessage = "DTAssimilation::configure(): assimilation block is "
                        "disabled in config (this is a programmer error — "
                        "DTRunner shouldn't construct DTAssimilation when "
                        "the block is absent).";
@@ -58,34 +72,18 @@ bool DTAssimilation::start(QString &errorMessage)
     }
     if (m_config.assimilation.truthCsvUrl.empty())
     {
-        errorMessage = "DTAssimilation::start(): truth_csv_url is empty";
+        errorMessage = "DTAssimilation::configure(): truth_csv_url is empty";
         return false;
     }
     if (m_config.assimilation.pollIntervalMs <= 0)
     {
-        errorMessage = "DTAssimilation::start(): poll_interval must be > 0";
+        errorMessage = "DTAssimilation::configure(): poll_interval must be > 0";
         return false;
     }
 
     m_buffer.setEndpoints(
         QString::fromStdString(m_config.assimilation.truthCsvUrl),
         QString::fromStdString(m_config.assimilation.truthMetaUrl));
-
-    // Kick off an immediate first refresh so the buffer is populated
-    // before the first timer tick. Failure is logged but not fatal —
-    // the timer keeps polling and may succeed on a later tick.
-    if (!m_buffer.refresh())
-    {
-        std::cerr << "[Assim] initial refresh failed: "
-                  << m_buffer.lastError().toStdString()
-                  << " (will retry on poll timer)\n";
-    }
-    else
-    {
-        std::cout << "[Assim] initial refresh OK — "
-                  << m_buffer.pointCount() << " points across "
-                  << m_buffer.variableCount() << " variables\n";
-    }
 
     // Apply time_acceleration the same way the forward loop does, so that
     // poll_interval is interpreted in simulated time. With acceleration=1
@@ -96,33 +94,32 @@ bool DTAssimilation::start(QString &errorMessage)
         / m_config.timeAcceleration;
     const qint64 wallClockIntervalMs =
         static_cast<qint64>(std::max(1.0, wallClockIntervalMsD));
-    const qint64 safeIntervalMs =
+    m_pollIntervalWallClockMs =
         std::min(wallClockIntervalMs, static_cast<qint64>(INT_MAX));
 
-    m_pollTimer.start(static_cast<int>(safeIntervalMs));
-    m_started = true;
-
-    std::cout << "[Assim] poll timer started — "
-              << m_config.assimilation.pollIntervalMs << " ms simulated, "
-              << safeIntervalMs << " ms wall-clock"
-              << " (acceleration " << m_config.timeAcceleration << "x)\n";
+    // NOTE: the initial buffer refresh has been moved to startTimer(),
+    // which runs on the assimilation thread. Refreshing here triggers
+    //   "QObject::startTimer: Timers cannot be started from another thread"
+    // because m_buffer's QNetworkAccessManager is constructed on the
+    // assimilation thread (via moveToThread()) and cannot be used from
+    // the main thread.
     return true;
-
-}
-
-void DTAssimilation::stop()
-{
-    if (m_pollTimer.isActive()) m_pollTimer.stop();
-    m_started = false;
-}
-
-bool DTAssimilation::refreshNow()
-{
-    return m_buffer.refresh();
 }
 
 void DTAssimilation::onPollTick()
 {
+    // Defensive guard. Under normal operation the Qt event loop on the
+    // assimilation thread serializes timer ticks behind the running
+    // calibration, so this flag is never observed true. It matters only
+    // if runCalibration() ever pumps a local event loop (e.g. for
+    // progress signals), in which case a re-entrant tick could otherwise
+    // start a second calibration on top of the first.
+    if (m_calibrationInProgress)
+    {
+        std::cout << "[Assim] poll tick skipped (calibration in progress)\n";
+        return;
+    }
+
     if (!m_buffer.refresh())
     {
         std::cerr << "[Assim] poll failed: "
@@ -131,12 +128,22 @@ void DTAssimilation::onPollTick()
         return;   // skip calibration on stale data
     }
 
+    // Publish buffer summary for cross-thread readers (the forward loop
+    // reads these atomics from the main thread when deciding the
+    // advance window in runOnce()).
+    m_bufferTMax.store(m_buffer.tMax());
+    m_bufferPointCount.store(static_cast<qint64>(m_buffer.pointCount()));
+
     std::cout << "[Assim] poll OK — " << m_buffer.pointCount()
               << " points buffered, starting calibration\n";
     emit buffered(static_cast<qint64>(m_buffer.pointCount()));
 
+    m_calibrationInProgress = true;
     QString calErr;
-    if (!runCalibration(calErr))
+    const bool ok = runCalibration(calErr);
+    m_calibrationInProgress = false;
+
+    if (!ok)
     {
         std::cerr << "[Assim] calibration failed: "
                   << calErr.toStdString() << "\n";
@@ -518,4 +525,61 @@ bool DTAssimilation::writeParameterLog(const System &sys, int cycleIndex)
     std::cout << "[Assim] parameter log updated: cycle " << cycleIndex
               << " → " << filePath.toStdString() << "\n";
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// startTimer
+// Starts the poll timer. Must be invoked on the assimilation thread; we rely
+// on QThread::started → this slot via AutoConnection (becomes Queued across
+// threads) to ensure the start() call happens on the correct thread.
+// ---------------------------------------------------------------------------
+void DTAssimilation::startTimer()
+{
+    if (m_started) return;
+
+    if (m_pollIntervalWallClockMs <= 0)
+    {
+        std::cerr << "[Assim] startTimer() called before configure() — "
+                  << "no interval set; timer will not start.\n";
+        return;
+    }
+
+    // First refresh runs here, on the assim thread, so QNetworkAccessManager
+    // (and any internal timers it owns) is constructed and used on the
+    // thread it lives on. Doing this in configure() — which runs on the
+    // main thread before moveToThread() — would trigger
+    //   "QObject::startTimer: Timers cannot be started from another thread"
+    // when the assim thread later tries to use the same NAM.
+    if (!m_buffer.refresh())
+    {
+        std::cerr << "[Assim] initial refresh failed: "
+                  << m_buffer.lastError().toStdString()
+                  << " (will retry on poll timer)\n";
+    }
+    else
+    {
+        std::cout << "[Assim] initial refresh OK — "
+                  << m_buffer.pointCount() << " points across "
+                  << m_buffer.variableCount() << " variables\n";
+        m_bufferTMax.store(m_buffer.tMax());
+        m_bufferPointCount.store(static_cast<qint64>(m_buffer.pointCount()));
+    }
+
+    m_pollTimer.start(static_cast<int>(m_pollIntervalWallClockMs));
+    m_started = true;
+
+    std::cout << "[Assim] poll timer started on assim thread — "
+              << m_config.assimilation.pollIntervalMs << " ms simulated, "
+              << m_pollIntervalWallClockMs << " ms wall-clock"
+              << " (acceleration " << m_config.timeAcceleration << "x)\n";
+}
+// ---------------------------------------------------------------------------
+// stopTimer
+// Stops the poll timer. Idempotent. Must be invoked on the assimilation
+// thread (the timer lives there).
+// ---------------------------------------------------------------------------
+void DTAssimilation::stopTimer()
+{
+    if (m_pollTimer.isActive()) m_pollTimer.stop();
+    m_started = false;
 }

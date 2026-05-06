@@ -36,6 +36,7 @@
 
 class System;
 class DTAssimilation;
+class QThread;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -118,6 +119,14 @@ public slots:
     bool renderOnly();
 
     void onCalibrationCompleted(QString newSnapshotPath);
+
+signals:
+    // Emitted at the end of each successful runOnce() to hand off the
+    // freshly-written state snapshot path to the assimilation thread.
+    // Connected to DTAssimilation::setLatestSnapshot via AutoConnection,
+    // which becomes QueuedConnection across threads.
+    void snapshotReady(QString path);
+
 
 private:
     // -----------------------------------------------------------------------
@@ -248,8 +257,18 @@ private:
     std::unique_ptr<DTAssimilation> m_assimilation;
 
     QString m_pendingCalibratedSnapshot;
+
+    // Dedicated thread the assimilation object lives on after
+    // moveToThread().  Parented to *this* (QObject ownership), but
+    // ~DTRunner() explicitly calls quit()/wait() on it before
+    // m_assimilation is destroyed, to guarantee no timer tick fires
+    // onto a half-destroyed DTAssimilation.  nullptr when assimilation
+    // is disabled.
+    QThread *m_assimThread = nullptr;
+
+
 };
 
-static QDateTime fromOHQDaySerial(double serial);
+QDateTime fromOHQDaySerial(double serial);
 
 

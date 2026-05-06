@@ -26,6 +26,7 @@
 #include <QString>
 #include <QTimer>
 #include "System.h"
+#include <atomic>
 
 class DTConfig;
 
@@ -54,24 +55,24 @@ class DTAssimilation : public QObject
 public:
     explicit DTAssimilation(const DTConfig &config, QObject *parent = nullptr);
 
-    // Configure endpoints and start the polling timer. Call this once
-    // after construction (in DTRunner::init() once basic setup is done).
-    // Returns false if essential config is missing.
-    bool start(QString &errorMessage);
+    // Configure endpoints. Call once on the *owning* (main) thread before
+    // moveToThread(). Performs the initial buffer refresh and validates
+    // config. Does NOT start the timer — that happens in startTimer(),
+    // which must run on the assimilation thread.
+    bool configure(QString &errorMessage);
 
-    // Stop the polling timer. Idempotent.
-    void stop();
+    // *on the assimilation thread*. NOT safe to call from other threads
+    // once the object has been moveToThread()'d. Cross-thread callers
+    // should use bufferTMax() / bufferPointCount() instead.
 
-    // Read-only access to the buffer for callers that need observations
-    // (e.g. a future calibration trigger).
     const DTObservationBuffer &buffer() const { return m_buffer; }
 
-    // Force a refresh outside the normal polling cadence (e.g. just
-    // before kicking off a calibration cycle). Returns the buffer's
-    // refresh() result.
-    bool refreshNow();
+    // Thread-safe accessors for the forward (main) thread.
+    // Updated after each successful poll.
+    double bufferTMax() const { return m_bufferTMax.load();       }
+    qint64 bufferPointCount() const { return m_bufferPointCount.load(); }
 
-    void setLatestSnapshot(const QString &path) { m_latestSnapshotPath = path; }
+
 
 
 signals:
@@ -89,11 +90,30 @@ signals:
 private slots:
     void onPollTick();
 
+
+public slots:
+    // Start the poll timer. Must be invoked on the assimilation thread
+    // (typically via a queued connection from QThread::started).
+    void startTimer();
+
+    // Stop the poll timer. Must be invoked on the assimilation thread
+    // (use QMetaObject::invokeMethod with QueuedConnection from outside).
+    void stopTimer();
+
+    // Snapshot handoff from the forward thread. Connect via signal/slot
+    // (auto-becomes QueuedConnection across threads); never call directly
+    // from another thread.
+    void setLatestSnapshot(QString path) { m_latestSnapshotPath = path; }
+
 private:
     const DTConfig       &m_config;
     DTObservationBuffer   m_buffer;
     QTimer                m_pollTimer;
     bool                  m_started = false;
+    bool m_calibrationInProgress = false;   // touched only on assim thread
+    std::atomic<double> m_bufferTMax{0.0};
+    std::atomic<qint64> m_bufferPointCount{0};
+    qint64 m_pollIntervalWallClockMs = 0;
     int m_cyclesCompleted = 0;
     bool runCalibration(QString &errorMessage);
     bool archiveGAOutput(int cycleIndex);

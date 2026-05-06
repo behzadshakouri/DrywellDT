@@ -50,6 +50,13 @@
 
 int main(int argc, char *argv[])
 {
+    qInstallMessageHandler([](QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {
+        fprintf(stderr, "[Qt] %s\n", msg.toLocal8Bit().constData());
+        if (msg.contains("Timers cannot be started")) {
+            std::abort();
+        }
+    });
+
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("OHTwin");
     QCoreApplication::setApplicationVersion("1.0");
