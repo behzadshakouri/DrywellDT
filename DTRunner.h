@@ -37,6 +37,7 @@
 class System;
 class DTAssimilation;
 class QThread;
+class RunLogger;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -265,6 +266,10 @@ private:
     // onto a half-destroyed DTAssimilation.  nullptr when assimilation
     // is disabled.
     QThread *m_assimThread = nullptr;
+
+    // Owned for the entire lifetime of the runner; shared with
+    // m_assimilation (raw pointer) so calibration cycles can append rows.
+    std::unique_ptr<RunLogger> m_runLogger;
 
 
 };

@@ -129,6 +129,7 @@ SOURCES += \
     DTObservationBuffer.cpp \
     DTRunner.cpp \
     DTWeather.cpp \
+    RunLogger.cpp \
     VizRenderer.cpp \
     main.cpp \
     noaaweatherfetcher.cpp
@@ -196,6 +197,7 @@ HEADERS += \
     DTObservationBuffer.h \
     DTRunner.h \
     DTWeather.h \
+    RunLogger.h \
     VizRenderer.h \
     noaaweatherfetcher.h
 

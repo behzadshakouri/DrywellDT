@@ -37,6 +37,7 @@
 #include "VizRenderer.h"
 #include "DTWeather.h"
 #include <QThread>
+#include "RunLogger.h"
 
 // ---------------------------------------------------------------------------
 // OHQ epoch: day-serial 0 = 1899-12-30 (Excel convention)
@@ -173,12 +174,20 @@ bool DTRunner::init(QString &errorMessage)
     // threads — preserving Qt's invariant that a slot only runs on the
     // thread its owning QObject lives on.
     // ------------------------------------------------------------------
+
+
+    m_runLogger.reset(new RunLogger(QString::fromStdString(m_config.outputDir)));
+
+
     if (m_config.assimilation.enabled)
     {
+
+        m_assimilation.reset(new DTAssimilation(m_config, nullptr));   // create first
+        m_assimilation->setRunLogger(m_runLogger.get());
         // Construct on the main thread with parent=nullptr.  A QObject with
         // a parent cannot be moved to another thread, so we keep parentage
         // off and rely on unique_ptr for lifetime.
-        m_assimilation.reset(new DTAssimilation(m_config, nullptr));
+
 
         // Validate config and perform the initial buffer refresh on the
         // main thread.  Must happen before moveToThread() so that any
@@ -245,6 +254,8 @@ bool DTRunner::init(QString &errorMessage)
     {
         std::cout << "[Runner] Assimilation disabled (no 'assimilation' block in config).\n";
     }
+
+
 
     return true;
 }
@@ -610,6 +621,13 @@ StageResult DTRunner::runStage(StageKind kind,
                                const QDateTime &stageEnd,
                                const QString &modelJsonPath)
 {
+    const QDateTime wallStart = QDateTime::currentDateTimeUtc();
+    const double simStartSerial = toOHQDaySerial(stageStart);
+    const double simEndSerial   = toOHQDaySerial(stageEnd);
+    const QString initialIcPath = modelJsonPath.isEmpty()
+                                      ? QStringLiteral("(cold start from script)")
+                                      : modelJsonPath;
+
     StageResult result;
     result.kind = kind;
 
@@ -785,6 +803,26 @@ StageResult DTRunner::runStage(StageKind kind,
     }
 
     result.ok = true;
+
+    if (m_runLogger)
+    {
+        m_runLogger->recordRun(
+            (kind == StageKind::Advance)
+                ? RunLogger::RunType::ForwardAdvance
+                : RunLogger::RunType::ForwardForecast,
+            m_runsCompleted + 1,                      // cycle (current)
+            wallStart,
+            QDateTime::currentDateTimeUtc(),
+            simStartSerial,
+            simEndSerial,
+            initialIcPath,
+            result.stateSnapshotPath,                  // empty for Forecast
+            result.ok ? RunLogger::Status::Ok : RunLogger::Status::Failed,
+            result.ok ? QString()
+                      : QStringLiteral("runStage failed; see runner log"));
+    }
+    return result;
+
     return result;
 }
 

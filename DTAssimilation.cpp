@@ -37,6 +37,7 @@
 #include <QDateTime>
 #include <iostream>
 #include <QThread>
+#include "RunLogger.h"
 
 DTAssimilation::DTAssimilation(const DTConfig &config, QObject *parent)
     : QObject(parent)
@@ -193,12 +194,37 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     if (!sys.ReadSystemSettingsTemplate(settingsFile))
     {
         errorMessage = "failed to load settings template from " + QString::fromStdString(settingsFile);
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
+
     }
 
     if (!sys.LoadfromJson(m_latestSnapshotPath))
     {
         errorMessage = "System::LoadfromJson failed for " + m_latestSnapshotPath;
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
     }
 
@@ -206,12 +232,36 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     if (sys.ParametersCount() == 0)
     {
         errorMessage = "no Parameters defined in model — calibration skipped";
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
     }
     ErrorHandler errs = sys.VerifyAllQuantities();
     if (errs.Count() != 0)
     {
         errorMessage = "model has verification errors";
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
     }
 
@@ -247,6 +297,18 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     {
         errorMessage = "no buffered observations matched any selected "
                        "Observation by name";
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
     }
     std::cout << "[Assim] pushed observed_data into " << matched
@@ -281,7 +343,20 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     if (!generalSettings)
     {
         errorMessage = "no 'General Settings' object found in System";
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
+
     }
     generalSettings->Variable("simulation_start_time")
         ->SetProperty(std::to_string(tStart));
@@ -418,9 +493,21 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
                               .toString("yyyyMMdd_HHmmss");
     const QString newSnapshotPath = calibDir
                                     + "/state_calibrated_" + stamp + ".json";
-    if (!sys.SavetoJson(newSnapshotPath.toStdString(), {}, true, true))
+    if (!sys.SavetoJson(newSnapshotPath.toStdString(), {}, false, false))
     {
         errorMessage = "failed to write calibrated snapshot: " + newSnapshotPath;
+        if (m_runLogger)
+        {
+            m_runLogger->recordRun(
+                RunLogger::RunType::AssimCalibration,
+                m_cyclesCompleted + 1,
+                calStart, QDateTime::currentDateTimeUtc(),
+                -1.0, -1.0,                                // no valid sim window
+                m_latestSnapshotPath,
+                QString(),
+                RunLogger::Status::Failed,
+                errorMessage);
+        }
         return false;
     }
 
@@ -435,6 +522,23 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
               << " finished in " << (elapsedMs / 1000.0) << " sec\n";
 
     writeParameterLog(sys, m_cyclesCompleted);
+
+    if (m_runLogger)
+    {
+        std::cout << "[Assim] writing run_log row, runLogger ptr=" << m_runLogger << "\n";
+        m_runLogger->recordRun(
+            RunLogger::RunType::AssimCalibration,
+            m_cyclesCompleted,
+            calStart, calEnd,
+            tStart, tEnd,
+            m_latestSnapshotPath,
+            newSnapshotPath,
+            RunLogger::Status::Ok);
+    }
+    else
+    {
+        std::cout << "[Assim] runLogger is NULL — calibration not logged\n";
+    }
 
     emit calibrationCompleted(newSnapshotPath);
 

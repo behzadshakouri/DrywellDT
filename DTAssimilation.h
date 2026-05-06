@@ -29,6 +29,7 @@
 #include <atomic>
 
 class DTConfig;
+class RunLogger;
 
 // ---------------------------------------------------------------------------
 // DTAssimilation
@@ -72,7 +73,7 @@ public:
     double bufferTMax() const { return m_bufferTMax.load();       }
     qint64 bufferPointCount() const { return m_bufferPointCount.load(); }
 
-
+    void setRunLogger(RunLogger *logger) { m_runLogger = logger; }
 
 
 signals:
@@ -119,4 +120,5 @@ private:
     bool archiveGAOutput(int cycleIndex);
     QString m_latestSnapshotPath;
     bool writeParameterLog(const System &sys, int cycleIndex);
+    RunLogger *m_runLogger = nullptr;   // not owned; lifetime managed by DTRunner
 };
