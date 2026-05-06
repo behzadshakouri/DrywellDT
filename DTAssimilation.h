@@ -25,6 +25,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include "System.h"
 
 class DTConfig;
 
@@ -97,4 +98,5 @@ private:
     bool runCalibration(QString &errorMessage);
     bool archiveGAOutput(int cycleIndex);
     QString m_latestSnapshotPath;
+    bool writeParameterLog(const System &sys, int cycleIndex);
 };

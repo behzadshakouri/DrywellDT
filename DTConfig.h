@@ -154,6 +154,14 @@ public:
     // Useful for historical / Truth-Twin runs.
     double      timeAcceleration = 1.0;
 
+    // When true (and assimilation is enabled), runOnce advances simulated
+    // time from m_nextIntervalStart all the way to the most recent
+    // observation timestamp in the buffer (m_assimilation->buffer().tMax())
+    // in a single forward step. This lets the assim twin catch up after
+    // calibration cycles that would otherwise have left it behind.
+    // Default false preserves the existing fixed-interval behavior.
+    bool        advanceToObservations = false;
+
     // --- forecast horizon ---
     // Optional duration of Stage B forecast window beyond the advance interval.
     // Same syntax as intervalStr. Empty / 0 = forecast disabled.

@@ -250,5 +250,6 @@ private:
     QString m_pendingCalibratedSnapshot;
 };
 
+static QDateTime fromOHQDaySerial(double serial);
 
 

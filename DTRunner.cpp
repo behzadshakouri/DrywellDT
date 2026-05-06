@@ -285,7 +285,34 @@ bool DTRunner::renderOnly()
 bool DTRunner::runOnce()
 {
     const QDateTime advanceStart = m_nextIntervalStart;
-    const QDateTime advanceEnd   = advanceStart.addMSecs(m_config.intervalMs);
+    QDateTime       advanceEnd;
+
+    if (m_config.advanceToObservations &&
+        m_assimilation &&
+        m_assimilation->buffer().pointCount() > 0)
+    {
+        const double tMaxSerial = m_assimilation->buffer().tMax();
+        const QDateTime tMaxDt  = fromOHQDaySerial(tMaxSerial);
+
+        if (tMaxDt > advanceStart)
+        {
+            // Catch up to the data frontier in one variable-width step.
+            advanceEnd = tMaxDt;
+            const double daysCovered =
+                advanceStart.msecsTo(tMaxDt) / 86400000.0;
+            std::cout << "[Runner] catch-up mode: advancing to data frontier "
+                      << "(" << daysCovered << " simulated days this cycle)\n";
+        }
+        else
+        {
+            // Already at or past the frontier — fall back to fixed interval
+            advanceEnd = advanceStart.addMSecs(m_config.intervalMs);
+        }
+    }
+    else
+    {
+        advanceEnd = advanceStart.addMSecs(m_config.intervalMs);
+    }
 
     std::cout << "\n[Runner] ======== Cycle " << (m_runsCompleted + 1) << " ========\n";
 
@@ -294,17 +321,43 @@ bool DTRunner::runOnce()
     // completed since the previous cycle takes precedence over the
     // latest forward snapshot, since its parameters are more current.
     QString latestSnapshot;
+    const QString cycleStamp =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
     if (!m_pendingCalibratedSnapshot.isEmpty() &&
         QFileInfo::exists(m_pendingCalibratedSnapshot))
     {
         latestSnapshot = m_pendingCalibratedSnapshot;
-        std::cout << "[Runner] consuming calibrated snapshot: "
+        std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
+                  << "CONSUMING calibrated snapshot: "
                   << m_pendingCalibratedSnapshot.toStdString() << "\n";
+
+        // DIAG: read parameter values from the calibrated snapshot so we can
+        // confirm the calibrated values are flowing into the forward cycle.
+        QJsonObject snap = readJson(m_pendingCalibratedSnapshot);
+        if (!snap.isEmpty() && snap.contains("Parameters"))
+        {
+            std::cout << "[Runner]   parameters in calibrated snapshot:\n";
+            const QJsonObject params = snap["Parameters"].toObject();
+            for (auto it = params.constBegin(); it != params.constEnd(); ++it)
+            {
+                const QJsonObject p = it.value().toObject();
+                std::cout << "[Runner]     " << it.key().toStdString()
+                          << " = " << p["value"].toString().toStdString()
+                          << " [" << p["low"].toString().toStdString()
+                          << ", " << p["high"].toString().toStdString() << "]\n";
+            }
+        }
         m_pendingCalibratedSnapshot.clear();
     }
     else
     {
         latestSnapshot = findLatestStateSnapshot();
+        std::cout << "[Runner] [" << cycleStamp.toStdString() << "] "
+                  << "loading forward snapshot: "
+                  << (latestSnapshot.isEmpty()
+                          ? std::string("(cold start)")
+                          : latestSnapshot.toStdString()) << "\n";
     }
 
     QString initialModelJsonPath;
@@ -461,7 +514,9 @@ bool DTRunner::runOnce()
     ++m_runsCompleted;
     m_nextIntervalStart = advanceEnd;
 
-    std::cout << "[Runner] Cycle complete. Next cycle start: "
+    const QString endStamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    std::cout << "[Runner] [" << endStamp.toStdString() << "] "
+              << "Cycle complete. Next cycle start: "
               << m_nextIntervalStart.toString(Qt::ISODate).toStdString() << "\n";
 
     // ------------------------------------------------------------------
@@ -1100,7 +1155,16 @@ bool DTRunner::writeMetadataSidecar() const
 
 void DTRunner::onCalibrationCompleted(QString newSnapshotPath)
 {
+    const QString stamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
     m_pendingCalibratedSnapshot = newSnapshotPath;
-    std::cout << "[Runner] calibrated snapshot received, will use on next cycle: "
-              << newSnapshotPath.toStdString() << "\n";
+    std::cout << "[Runner] [" << stamp.toStdString() << "] "
+              << "calibrated snapshot received: "
+              << newSnapshotPath.toStdString() << "\n"
+              << "[Runner] (will consume on next forward cycle)\n";
+}
+
+static QDateTime fromOHQDaySerial(double serial)
+{
+    const qint64 ms = static_cast<qint64>((serial - 25569.0) * 86400000.0);
+    return QDateTime::fromMSecsSinceEpoch(ms, Qt::UTC);
 }

@@ -153,6 +153,10 @@ void DTAssimilation::onPollTick()
 // ---------------------------------------------------------------------------
 bool DTAssimilation::runCalibration(QString &errorMessage)
 {
+    const QDateTime calStart = QDateTime::currentDateTimeUtc();
+    std::cout << "[Assim] [" << calStart.toString(Qt::ISODate).toStdString() << "] "
+              << "calibration cycle " << (m_cyclesCompleted + 1) << " starting\n";
+
     // Guard: need a snapshot to calibrate against.
     if (m_latestSnapshotPath.isEmpty())
     {
@@ -396,7 +400,17 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     ++m_cyclesCompleted;
     std::cout << "[Assim] calibration cycle " << m_cyclesCompleted
               << " completed: " << newSnapshotPath.toStdString() << "\n";
+
+    const QDateTime calEnd = QDateTime::currentDateTimeUtc();
+    const qint64 elapsedMs = calStart.msecsTo(calEnd);
+    std::cout << "[Assim] [" << calEnd.toString(Qt::ISODate).toStdString() << "] "
+              << "calibration cycle " << m_cyclesCompleted
+              << " finished in " << (elapsedMs / 1000.0) << " sec\n";
+
+    writeParameterLog(sys, m_cyclesCompleted);
+
     emit calibrationCompleted(newSnapshotPath);
+
     return true;
 }
 
@@ -432,5 +446,56 @@ bool DTAssimilation::archiveGAOutput(int cycleIndex)
         << " ===\n";
     out << src.readAll();
     out << "\n";
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// writeParameterLog
+// Append a row to outputs/calibration/parameter_history.csv recording the
+// best parameter values found in this calibration cycle. Header is written
+// on the first cycle (when the file doesn't exist yet).
+// ---------------------------------------------------------------------------
+bool DTAssimilation::writeParameterLog(const System &sys, int cycleIndex)
+{
+    const QString calibDir =
+        QString::fromStdString(m_config.assimilation.calibrationOutputDir);
+    const QString filePath = calibDir + "/parameter_history.csv";
+
+    const bool fileExists = QFileInfo::exists(filePath);
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
+    {
+        std::cerr << "[Assim] failed to open " << filePath.toStdString()
+        << " for parameter log\n";
+        return false;
+    }
+
+    QTextStream out(&file);
+    const QString stamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+    const double tMax = (m_buffer.pointCount() > 0) ? m_buffer.tMax() : 0.0;
+
+    auto &params = const_cast<System &>(sys).Parameters();
+    const int nParams = static_cast<int>(params.size());
+
+    if (!fileExists)
+    {
+        out << "cycle,timestamp,t_now";
+        for (int i = 0; i < nParams; ++i)
+            out << "," << QString::fromStdString(params[i]->GetName());
+        out << "\n";
+    }
+
+    out << cycleIndex << "," << stamp << "," << QString::number(tMax, 'f', 6);
+    for (int i = 0; i < nParams; ++i)
+    {
+        const std::string val = params[i]->Variable("value")->GetProperty();
+        out << "," << QString::fromStdString(val);
+    }
+    out << "\n";
+    file.close();
+
+    std::cout << "[Assim] parameter log updated: cycle " << cycleIndex
+              << " → " << filePath.toStdString() << "\n";
     return true;
 }

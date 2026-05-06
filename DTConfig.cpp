@@ -477,6 +477,9 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         std::cout << "[Config] assimilation      : disabled\n";
     }
 
+    std::cout << "[Config] advance_to_obs   : "
+              << (advanceToObservations ? "true" : "false") << "\n";
+
     return true;
 }
 
