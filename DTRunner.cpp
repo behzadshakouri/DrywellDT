@@ -45,6 +45,86 @@
 static const QDate kOHQEpoch(1899, 12, 30);
 
 // ---------------------------------------------------------------------------
+// Preferred output ordering for selected_output.csv / viewer panels
+// Keeps drywell hydraulic context first and ERT-like theta profiles last.
+// This is intentionally applied at write time because TimeSeriesSet preserves
+// the order loaded from an existing selected_output.csv, so changing the .ohq
+// observation order alone may not affect an already-bootstrapped deployment.
+// ---------------------------------------------------------------------------
+static int vnSelectedOutputRank(const std::string &name)
+{
+    const QString s = QString::fromStdString(name).toLower();
+
+    if (s.contains("well_c")) return 0;
+    if (s.contains("well c")) return 0;
+
+    if (s.contains("well_g")) return 1;
+    if (s.contains("well g")) return 1;
+
+    if (s.contains("groundwater")) return 2;
+    if (s.contains("ground water")) return 2;
+    if (s.contains("gw_")) return 2;
+    if (s.contains("gw ")) return 2;
+
+    if (s.contains("recharge")) return 3;
+    if (s.contains("flow")) return 4;
+
+    if (s.contains("ert5")) return 90;
+    if (s.contains("ert3")) return 91;
+    if (s.contains("ert"))  return 92;
+
+    return 20;
+}
+
+static int vnSelectedOutputDepthRank(const std::string &name)
+{
+    const QString s = QString::fromStdString(name).toLower();
+    const int z = s.indexOf('z');
+    if (z < 0) return 0;
+
+    int i = z + 1;
+    while (i < s.size() && !s[i].isDigit()) ++i;
+    if (i >= s.size()) return 0;
+
+    int j = i;
+    while (j < s.size() && s[j].isDigit()) ++j;
+
+    bool ok = false;
+    const int v = s.mid(i, j - i).toInt(&ok);
+    return ok ? v : 0;
+}
+
+static TimeSeriesSet<double> reorderSelectedOutputSeries(const TimeSeriesSet<double> &in)
+{
+    std::vector<size_t> idx(in.size());
+    for (size_t i = 0; i < in.size(); ++i) idx[i] = i;
+
+    std::stable_sort(idx.begin(), idx.end(),
+        [&in](size_t a, size_t b)
+        {
+            const std::string an = in[a].name();
+            const std::string bn = in[b].name();
+
+            const int ar = vnSelectedOutputRank(an);
+            const int br = vnSelectedOutputRank(bn);
+            if (ar != br) return ar < br;
+
+            const int ad = vnSelectedOutputDepthRank(an);
+            const int bd = vnSelectedOutputDepthRank(bn);
+            if (ad != bd) return ad < bd;
+
+            return an < bn;
+        });
+
+    TimeSeriesSet<double> out;
+    for (size_t k = 0; k < idx.size(); ++k)
+        out.push_back(in[idx[k]]);
+
+    return out;
+}
+
+
+// ---------------------------------------------------------------------------
 // ctor
 // ---------------------------------------------------------------------------
 DTRunner::DTRunner(const DTConfig &config, QObject *parent)
@@ -972,12 +1052,14 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
     }
 
     // ------------------------------------------------------------------
-    // 5. Write back (full file with header)
+    // 5. Write back (full file with header), with stable viewer-friendly
+    //    ordering independent of OHQ/internal/existing-CSV series order.
     // ------------------------------------------------------------------
-    merged.write(selectedOutputFile.toStdString());
+    TimeSeriesSet<double> ordered = reorderSelectedOutputSeries(merged);
+    ordered.write(selectedOutputFile.toStdString());
     std::cout << "[Runner] selected_output.csv merged: "
-              << merged.size() << " series, "
-              << merged.maxnumpoints() << " max rows\n";
+              << ordered.size() << " series, "
+              << ordered.maxnumpoints() << " max rows\n";
 
     return true;
 }
