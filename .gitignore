@@ -104,3 +104,5 @@ deployments/Bioretention_assimilation/model/Objective_Function_TimeSeries.txt
 deployments/Bioretention_assimilation/model/objective_function_values.txt
 
 deployments/Bioretention_assimilation/model/observedoutput.txt
+
+deployments/truth_vs_assim.png
