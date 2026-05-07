@@ -7,6 +7,7 @@
 #include <QRegularExpression>
 #include <QStringList>
 #include <QUrlQuery>
+#include <algorithm>
 #include <QtGlobal>
 
 CsvLoader::CsvLoader(QObject *parent)
@@ -24,6 +25,49 @@ static QNetworkRequest noCacheRequest(QUrl url)
     req.setAttribute(QNetworkRequest::CacheLoadControlAttribute,
                      QNetworkRequest::AlwaysNetwork);
     return req;
+}
+
+
+static int viewerSeriesPriority(const QString &name)
+{
+    const QString n = name.toLower();
+
+    // Put drywell context plots first.
+    if (n.contains(QStringLiteral("well_c")) || n.contains(QStringLiteral("well c"))) return 0;
+    if (n.contains(QStringLiteral("well_g")) || n.contains(QStringLiteral("well g"))) return 1;
+    if (n.contains(QStringLiteral("groundwater")) || n.contains(QStringLiteral("ground water")) || n.contains(QStringLiteral("gw_"))) return 2;
+    if (n.contains(QStringLiteral("flow")) || n.contains(QStringLiteral("recharge"))) return 3;
+
+    // Keep ERT-like theta profile panels after the main hydraulic context.
+    if (n.contains(QStringLiteral("ert5"))) return 90;
+    if (n.contains(QStringLiteral("ert3"))) return 91;
+    if (n.contains(QStringLiteral("ert")))  return 92;
+
+    return 10;
+}
+
+static int trailingDepthIndex(const QString &name)
+{
+    // Handles labels like "ERT3 theta z10" or "ERT5_theta_z4".
+    const QRegularExpression re(QStringLiteral("[zZ]([0-9]+)\\b"));
+    const QRegularExpressionMatch m = re.match(name);
+    if (!m.hasMatch()) return -1;
+    bool ok = false;
+    const int z = m.captured(1).toInt(&ok);
+    return ok ? z : -1;
+}
+
+static bool viewerSeriesLess(const CsvSeries &a, const CsvSeries &b)
+{
+    const int pa = viewerSeriesPriority(a.name);
+    const int pb = viewerSeriesPriority(b.name);
+    if (pa != pb) return pa < pb;
+
+    const int za = trailingDepthIndex(a.name);
+    const int zb = trailingDepthIndex(b.name);
+    if (za >= 0 && zb >= 0 && za != zb) return za < zb;
+
+    return QString::localeAwareCompare(a.name, b.name) < 0;
 }
 
 static void normalizeBounds(CsvSeries &s)
@@ -115,6 +159,8 @@ void CsvLoader::parse(const QByteArray &data)
 
     for (auto &s : series)
         normalizeBounds(s);
+
+    std::stable_sort(series.begin(), series.end(), viewerSeriesLess);
 
     emit loaded(series);
 }
