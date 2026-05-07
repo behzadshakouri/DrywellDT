@@ -1382,34 +1382,21 @@ setvalue; object=system, quantity=outputfile, value=/mnt/3rd900/Projects/DryWell
 setvalue; object=Well_c, quantity=inflow, value=/mnt/3rd900/Projects/VN Drywell_Models/Pacoima Spreading Grounds_rainfall data.csv
 
 # ------------------------------------------------------------
-# VN viewer observations
-# Keep drywell context first so OHTwin selected_output.csv plots
-# Well/GW/flow panels before ERT theta profiles.
+# VN OHTwin observations: minimal requested set
+# 1) inflow into the top well (Well_c),
+# 2) top well head (Well_c),
+# 3) bottom well depth (Well_g),
+# 4) one ERT-like soil-moisture point.
+# Groundwater head is fixed, so it is intentionally removed.
 # Syntax follows Bioretention.ohq.
 # ------------------------------------------------------------
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=Storage,name=Well_c Storage (m3),object=Well_c,observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=Storage,name=Well_g Storage (m3),object=Well_g,observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=head,name=Groundwater Head (m),object=Ground Water,observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,name=Groundwater Recharge 0 (m3/day),object=Soil to Groundwater (0),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,name=Well to Soil Flow (m3/day),object=VL_Well_g - Soil-uw (0$0),observed_data=
-
-# ERT-5-like theta profile, r approximately 4.4 m, mapped to Soil-uw (3$j)
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z0,object=Soil-uw (3$0),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z2,object=Soil-uw (3$2),observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=inflow,name=Well_c Inflow (m3/day),object=Well_c,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=head,name=Well_c Head (m),object=Well_c,observed_data=
+create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=depth,name=Well_g Depth (m),object=Well_g,observed_data=
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z4,object=Soil-uw (3$4),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z6,object=Soil-uw (3$6),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z8,object=Soil-uw (3$8),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z10,object=Soil-uw (3$10),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT5 theta z11,object=Soil-uw (3$11),observed_data=
-
-# ERT-3-like theta profile, r approximately 6.8 m, mapped to Soil-uw (5$j)
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z0,object=Soil-uw (5$0),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z2,object=Soil-uw (5$2),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z4,object=Soil-uw (5$4),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z6,object=Soil-uw (5$6),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z8,object=Soil-uw (5$8),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z10,object=Soil-uw (5$10),observed_data=
-create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=theta,name=ERT3 theta z11,object=Soil-uw (5$11),observed_data=
+# ------------------------------------------------------------
+# End VN OHTwin observations
+# ------------------------------------------------------------
 
 # user_additional_commands
 # vn_runner_metadata:init_theta_mode=Default
