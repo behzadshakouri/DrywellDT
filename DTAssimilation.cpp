@@ -395,6 +395,30 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
             windowStart, windowEnd);
 
         DTWeather::injectPrecipitation(&sys, precip);
+
+        const std::string etSource = "Evapotranspiration_Penman (Soil)";
+
+        const auto temp = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "temperature_2m",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+        DTWeather::injectWeather(&sys, etSource, "Temperature", temp);
+
+        auto rh = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "relative_humidity_2m",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+
+        rh = rh/100.0;
+        DTWeather::injectWeather(&sys, etSource, "R_h", rh);
+
+        const auto wind = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "windspeed_10m",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+        DTWeather::injectWeather(&sys, etSource, "wind_speed", wind);
+
+        const auto rad = DTWeather::fetchWeatherVariable(
+            m_config.weatherSource, "shortwave_radiation",
+            m_config.latitude, m_config.longitude, windowStart, windowEnd);
+        DTWeather::injectWeather(&sys, etSource, "solar_radiation", rad);
     }
 
     std::cout << "[Assim] ===== Calibration window =====\n"

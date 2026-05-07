@@ -710,6 +710,32 @@ StageResult DTRunner::runStage(StageKind kind,
         precip.writefile(precipFile.toStdString());
     }
     DTWeather::injectPrecipitation(ohqSystem.get(), precip);
+    // Penman ET forcings — fetch and inject the four weather variables that
+    // the "Evapotranspiration_Penman (Soil)" source consumes. If the model
+    // uses a different ET formulation, the missing-variable warnings from
+    // injectWeather are harmless.
+    const std::string etSource = "Evapotranspiration_Penman (Soil)";
+
+    const auto temp = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "temperature_2m",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd);
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "Temperature", temp);
+
+    const auto rh = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "relative_humidity_2m",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd)/100.00;
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "R_h", rh);
+
+    const auto wind = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "windspeed_10m",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd);
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "wind_speed", wind);
+
+    const auto rad = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "shortwave_radiation",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd);
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "solar_radiation", rad);
+
     ohqSystem->CalcAllInitialValues();
     std::cout << "[Runner] Solving...\n";
     ohqSystem->Solve();

@@ -61,6 +61,30 @@ public:
         const QDateTime &intervalStart,
         const QDateTime &intervalEnd);
 
+
+    // Open-Meteo hourly forecast for a single non-precipitation variable
+    // (e.g. "temperature_2m", "relative_humidity_2m", "windspeed_10m",
+    // "shortwave_radiation"). Returns a TimeSeries<double> in OHQ day-serial
+    // time units, point-sampled at each hourly timestamp returned by the API,
+    // filtered to [intervalStart, intervalEnd]. Units pass through unchanged
+    // (°C, %, m/s, W/m² — Open-Meteo defaults).
+    TimeSeries<double> getOpenMeteoTimeSeries(
+        const QString   &quantity,
+        double           latitude,
+        double           longitude,
+        const QDateTime &intervalStart,
+        const QDateTime &intervalEnd);
+
+    // Open-Meteo hourly **archive** (ERA5-backed) sibling of
+    // getOpenMeteoTimeSeries. Same units and time convention.
+    // Note: archive data is delayed ~5 days from real time.
+    TimeSeries<double> getOpenMeteoHistoricalTimeSeries(
+        const QString   &quantity,
+        double           latitude,
+        double           longitude,
+        const QDateTime &intervalStart,
+        const QDateTime &intervalEnd);
+
     // Last error message from getOpenMeteoPrecipitation
     QString lastError() const { return m_lastError; }
 

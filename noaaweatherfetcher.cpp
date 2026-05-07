@@ -367,3 +367,198 @@ CPrecipitation NOAAWeatherFetcher::getOpenMeteoHistoricalPrecipitation(
 
     return precip;
 }
+
+// ---------------------------------------------------------------------------
+// getOpenMeteoTimeSeries
+// Forecast endpoint, single hourly variable (temperature, RH, wind, radiation).
+// Returns point-sampled TimeSeries<double> in OHQ day-serial time.
+// ---------------------------------------------------------------------------
+TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoTimeSeries(
+    const QString   &quantity,
+    double           latitude,
+    double           longitude,
+    const QDateTime &intervalStart,
+    const QDateTime &intervalEnd)
+{
+    TimeSeries<double> ts;
+    m_lastError.clear();
+
+    QUrl url("https://api.open-meteo.com/v1/forecast");
+    QUrlQuery query;
+    query.addQueryItem("latitude",      QString::number(latitude,  'f', 5));
+    query.addQueryItem("longitude",     QString::number(longitude, 'f', 5));
+    query.addQueryItem("hourly",        quantity);
+    query.addQueryItem("forecast_days", "7");
+    query.addQueryItem("timezone",      "GMT");
+    url.setQuery(query);
+
+    std::cout << "[OpenMeteo] Fetching: "
+              << url.toString().toStdString() << "\n";
+
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent",
+                         "DTRunner/1.0 (openhydroqual@example.com)");
+
+    QNetworkReply *reply = manager->get(request);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        m_lastError = "[OpenMeteo] Network error: " + reply->errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        reply->deleteLater();
+        return ts;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(reply->readAll(), &parseError);
+    reply->deleteLater();
+
+    if (doc.isNull()) {
+        m_lastError = "[OpenMeteo] JSON parse error: " + parseError.errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        return ts;
+    }
+
+    const QJsonObject root   = doc.object();
+    const QJsonObject hourly = root.value("hourly").toObject();
+    const QJsonArray  times  = hourly.value("time").toArray();
+    const QJsonArray  values = hourly.value(quantity).toArray();
+
+    if (times.isEmpty() || times.size() != values.size()) {
+        m_lastError = "[OpenMeteo] Unexpected response structure for '"
+                      + quantity + "'";
+        std::cerr << m_lastError.toStdString() << "\n";
+        return ts;
+    }
+
+    int loaded  = 0;
+    int skipped = 0;
+
+    for (int i = 0; i < times.size(); ++i)
+    {
+        QDateTime t = QDateTime::fromString(times[i].toString() + "Z", Qt::ISODate);
+        if (!t.isValid())
+            continue;
+
+        if (t < intervalStart || t > intervalEnd) {
+            ++skipped;
+            continue;
+        }
+
+        const double tSerial = toOHQDaySerial(t);
+        const double v       = values[i].toDouble();
+        ts.append(tSerial, v);
+        ++loaded;
+    }
+
+    ts.setName(quantity.toStdString());
+    std::cout << "[OpenMeteo] '" << quantity.toStdString()
+              << "' samples loaded: " << loaded
+              << " (skipped " << skipped << " outside window)\n";
+
+    return ts;
+}
+
+// ---------------------------------------------------------------------------
+// getOpenMeteoHistoricalTimeSeries
+// Archive (ERA5) endpoint sibling of getOpenMeteoTimeSeries.
+// ---------------------------------------------------------------------------
+TimeSeries<double> NOAAWeatherFetcher::getOpenMeteoHistoricalTimeSeries(
+    const QString   &quantity,
+    double           latitude,
+    double           longitude,
+    const QDateTime &intervalStart,
+    const QDateTime &intervalEnd)
+{
+    TimeSeries<double> ts;
+    m_lastError.clear();
+
+    const QString startDate =
+        intervalStart.toUTC().date().addDays(-1).toString("yyyy-MM-dd");
+    const QString endDate =
+        intervalEnd.toUTC().date().addDays(1).toString("yyyy-MM-dd");
+
+    QUrl url("https://archive-api.open-meteo.com/v1/archive");
+    QUrlQuery query;
+    query.addQueryItem("latitude",   QString::number(latitude,  'f', 5));
+    query.addQueryItem("longitude",  QString::number(longitude, 'f', 5));
+    query.addQueryItem("hourly",     quantity);
+    query.addQueryItem("start_date", startDate);
+    query.addQueryItem("end_date",   endDate);
+    query.addQueryItem("timezone",   "GMT");
+    url.setQuery(query);
+
+    std::cout << "[OpenMeteo-Archive] Fetching: "
+              << url.toString().toStdString() << "\n";
+
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent",
+                         "DTRunner/1.0 (openhydroqual@example.com)");
+
+    QNetworkReply *reply = manager->get(request);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        m_lastError = "[OpenMeteo-Archive] Network error: " + reply->errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        reply->deleteLater();
+        return ts;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(reply->readAll(), &parseError);
+    reply->deleteLater();
+
+    if (doc.isNull()) {
+        m_lastError = "[OpenMeteo-Archive] JSON parse error: " + parseError.errorString();
+        std::cerr << m_lastError.toStdString() << "\n";
+        return ts;
+    }
+
+    const QJsonObject root   = doc.object();
+    const QJsonObject hourly = root.value("hourly").toObject();
+    const QJsonArray  times  = hourly.value("time").toArray();
+    const QJsonArray  values = hourly.value(quantity).toArray();
+
+    if (times.isEmpty() || times.size() != values.size()) {
+        m_lastError = "[OpenMeteo-Archive] Unexpected response structure for '"
+                      + quantity + "'";
+        std::cerr << m_lastError.toStdString() << "\n";
+        return ts;
+    }
+
+    int loaded  = 0;
+    int skipped = 0;
+
+    for (int i = 0; i < times.size(); ++i)
+    {
+        QDateTime t = QDateTime::fromString(
+            times[i].toString(), "yyyy-MM-ddTHH:mm");
+        t.setTimeSpec(Qt::UTC);
+        if (!t.isValid())
+            continue;
+
+        if (t < intervalStart || t > intervalEnd) {
+            ++skipped;
+            continue;
+        }
+
+        const double tSerial = toOHQDaySerial(t);
+        const double v       = values[i].toDouble();
+        ts.append(tSerial, v);
+        ++loaded;
+    }
+
+    ts.setName(quantity.toStdString());
+    std::cout << "[OpenMeteo-Archive] '" << quantity.toStdString()
+              << "' samples loaded: " << loaded
+              << " (skipped " << skipped << " outside window)\n";
+
+    return ts;
+}
