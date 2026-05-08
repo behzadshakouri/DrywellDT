@@ -30,14 +30,10 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <iostream>
 #include <memory>
 #include <random>
-#include <string>
-#include <vector>
 #include "VizRenderer.h"
 #include "DTWeather.h"
 #include <QThread>
@@ -47,82 +43,6 @@
 // OHQ epoch: day-serial 0 = 1899-12-30 (Excel convention)
 // ---------------------------------------------------------------------------
 static const QDate kOHQEpoch(1899, 12, 30);
-
-
-// ---------------------------------------------------------------------------
-// selected_output.csv ordering helpers
-// Keep viewer panels in a user-facing order independent of the order in OHQ
-// returns observations or the order preserved by an existing selected_output.csv.
-// ---------------------------------------------------------------------------
-namespace
-{
-static std::string dtLowerCopy(std::string s)
-{
-    std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
-    return s;
-}
-
-static bool dtContains(const std::string &haystackLower, const std::string &needleLower)
-{
-    return haystackLower.find(needleLower) != std::string::npos;
-}
-
-static int dtSelectedOutputRank(const std::string &seriesName)
-{
-    const std::string n = dtLowerCopy(seriesName);
-
-    // Requested VN observation order:
-    //   1) inflow into top well
-    //   2) top well head/storage
-    //   3) bottom well depth/storage
-    //   4) one ERT-like soil moisture point
-    if (dtContains(n, "inflow") || dtContains(n, "catchment to well"))
-        return 0;
-
-    if (dtContains(n, "well_c") || dtContains(n, "well c"))
-        return 10;
-
-    if (dtContains(n, "well_g") || dtContains(n, "well g"))
-        return 20;
-
-    if (dtContains(n, "recharge") || dtContains(n, "flow"))
-        return 30;
-
-    if (dtContains(n, "ert5"))
-        return 90;
-
-    if (dtContains(n, "ert3"))
-        return 91;
-
-    if (dtContains(n, "ert") || dtContains(n, "theta") || dtContains(n, "soil moisture"))
-        return 92;
-
-    if (dtContains(n, "groundwater") || dtContains(n, "ground water") || dtContains(n, "gw"))
-        return 80;
-
-    return 50;
-}
-
-static TimeSeriesSet<double> dtReorderSelectedOutput(const TimeSeriesSet<double> &src)
-{
-    std::vector<size_t> idx(src.size());
-    for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
-
-    std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) {
-        const int ra = dtSelectedOutputRank(src[a].name());
-        const int rb = dtSelectedOutputRank(src[b].name());
-        if (ra != rb) return ra < rb;
-        return src[a].name() < src[b].name();
-    });
-
-    TimeSeriesSet<double> out;
-    for (size_t i : idx)
-        out.push_back(src[i]);
-    return out;
-}
-}
 
 // ---------------------------------------------------------------------------
 // ctor
@@ -790,6 +710,32 @@ StageResult DTRunner::runStage(StageKind kind,
         precip.writefile(precipFile.toStdString());
     }
     DTWeather::injectPrecipitation(ohqSystem.get(), precip);
+    // Penman ET forcings — fetch and inject the four weather variables that
+    // the "Evapotranspiration_Penman (Soil)" source consumes. If the model
+    // uses a different ET formulation, the missing-variable warnings from
+    // injectWeather are harmless.
+    const std::string etSource = "Evapotranspiration_Penman (Soil)";
+
+    const auto temp = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "temperature_2m",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd);
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "Temperature", temp);
+
+    const auto rh = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "relative_humidity_2m",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd)/100.00;
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "R_h", rh);
+
+    const auto wind = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "windspeed_10m",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd);
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "wind_speed", wind);
+
+    const auto rad = DTWeather::fetchWeatherVariable(
+        m_config.weatherSource, "shortwave_radiation",
+        m_config.latitude, m_config.longitude, stageStart, stageEnd);
+    DTWeather::injectWeather(ohqSystem.get(), etSource, "solar_radiation", rad);
+
     ohqSystem->CalcAllInitialValues();
     std::cout << "[Runner] Solving...\n";
     ohqSystem->Solve();
@@ -1026,9 +972,8 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
     }
 
     // ------------------------------------------------------------------
-    // 5. Reorder and write back (full file with header)
+    // 5. Write back (full file with header)
     // ------------------------------------------------------------------
-    merged = dtReorderSelectedOutput(merged);
     merged.write(selectedOutputFile.toStdString());
     std::cout << "[Runner] selected_output.csv merged: "
               << merged.size() << " series, "
