@@ -74,10 +74,17 @@ static int dtSelectedOutputRank(const std::string &seriesName)
     const std::string n = dtLowerCopy(seriesName);
 
     // Requested VN observation order:
+    //   0) precipitation / rainfall forcing
     //   1) inflow into top well
     //   2) top well head/storage
     //   3) bottom well depth/storage
-    //   4) one ERT-like soil moisture point
+    //   4) recharge / flow
+    //   5) groundwater
+    //   6) ERT-like soil moisture points
+
+    if (dtContains(n, "precip") || dtContains(n, "rain"))
+        return -10;
+
     if (dtContains(n, "inflow") || dtContains(n, "catchment to well"))
         return 0;
 
@@ -87,8 +94,14 @@ static int dtSelectedOutputRank(const std::string &seriesName)
     if (dtContains(n, "well_g") || dtContains(n, "well g"))
         return 20;
 
-    if (dtContains(n, "recharge") || dtContains(n, "flow"))
+    if (dtContains(n, "recharge"))
         return 30;
+
+    if (dtContains(n, "flow"))
+        return 40;
+
+    if (dtContains(n, "groundwater") || dtContains(n, "ground water") || dtContains(n, "gw"))
+        return 80;
 
     if (dtContains(n, "ert5"))
         return 90;
@@ -98,9 +111,6 @@ static int dtSelectedOutputRank(const std::string &seriesName)
 
     if (dtContains(n, "ert") || dtContains(n, "theta") || dtContains(n, "soil moisture"))
         return 92;
-
-    if (dtContains(n, "groundwater") || dtContains(n, "ground water") || dtContains(n, "gw"))
-        return 80;
 
     return 50;
 }
