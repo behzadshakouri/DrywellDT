@@ -481,6 +481,16 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     sys.Parameters() = ga.Model_out.Parameters();
     sys.SetOutputItems();
 
+    ga.Model_out.Solve();   // or whatever the forward path's solve call is
+
+    const QString reanalysisPath =
+        QString::fromStdString(m_config.outputDir) + "/reanalysis_output.csv";
+    ga.Model_out.GetObservedOutputs().write(reanalysisPath.toStdString());
+
+
+    std::cout << "[Assim] reanalysis written: "
+              << reanalysisPath.toStdString() << "\n";
+
     // 9. Archive GA output to the merged file.
     if (!archiveGAOutput(m_cyclesCompleted))
     {
