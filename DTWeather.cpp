@@ -89,4 +89,68 @@ void injectPrecipitation(System *system, const CPrecipitation &precip)
               << " precipitation bins into 'Rain' source.\n";
 }
 
+TimeSeries<double> fetchWeatherVariable(const std::string &weatherSource,
+                                        const std::string &quantity,
+                                        double             latitude,
+                                        double             longitude,
+                                        const QDateTime   &intervalStart,
+                                        const QDateTime   &intervalEnd)
+{
+    NOAAWeatherFetcher fetcher;
+    const QString q = QString::fromStdString(quantity);
+
+    if (weatherSource == "openmeteo")
+    {
+        TimeSeries<double> ts = fetcher.getOpenMeteoTimeSeries(
+            q, latitude, longitude, intervalStart, intervalEnd);
+        if (ts.size() == 0)
+            std::cerr << "[Weather] Warning fetching '" << quantity << "': "
+                      << fetcher.lastError().toStdString() << "\n";
+        return ts;
+    }
+    if (weatherSource == "openmeteo_historical")
+    {
+        TimeSeries<double> ts = fetcher.getOpenMeteoHistoricalTimeSeries(
+            q, latitude, longitude, intervalStart, intervalEnd);
+        if (ts.size() == 0)
+            std::cerr << "[Weather] Warning fetching '" << quantity << "': "
+                      << fetcher.lastError().toStdString() << "\n";
+        return ts;
+    }
+    std::cerr << "[Weather] Unknown weather_source: '" << weatherSource
+              << "' (expected 'openmeteo' or 'openmeteo_historical')\n";
+    return TimeSeries<double>();
+}
+
+void injectWeather(System                    *system,
+                   const std::string         &sourceName,
+                   const std::string         &variableName,
+                   const TimeSeries<double>  &series)
+{
+    if (series.size() == 0)
+    {
+        std::cerr << "[Weather] injectWeather: empty series for '"
+                  << sourceName << "." << variableName << "', skipping.\n";
+        return;
+    }
+    Source *src = system->source(sourceName);
+    if (!src)
+    {
+        std::cerr << "[Weather] injectWeather: source '" << sourceName
+                  << "' not found, skipping (model may not use this variable).\n";
+        return;
+    }
+    auto *var = src->Variable(variableName);
+    if (!var)
+    {
+        std::cerr << "[Weather] injectWeather: variable '" << variableName
+                  << "' not found on '" << sourceName << "', skipping.\n";
+        return;
+    }
+    var->SetTimeSeries(series);
+    std::cout << "[Weather] Injected " << series.size()
+              << " samples into '" << sourceName << "." << variableName
+              << "'.\n";
+}
+
 }   // namespace DTWeather

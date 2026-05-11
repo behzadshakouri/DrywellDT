@@ -104,3 +104,15 @@ deployments/Bioretention_assimilation/model/Objective_Function_TimeSeries.txt
 deployments/Bioretention_assimilation/model/objective_function_values.txt
 
 deployments/Bioretention_assimilation/model/observedoutput.txt
+
+deployments/truth_vs_assim.png
+
+deployments/Bioretention_assimilation/config.json
+
+build-OHTwinViewer-wasm/
+
+build-OHTwinViewer-WebAssembly_Qt_6_9_0_single_threaded-Release/
+
+deployments/VN/model/observedoutput.txt
+
+deployments/VN/model/output.txt
