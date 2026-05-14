@@ -5,6 +5,7 @@
         "viz_file": "viz_bioretention.json",
         "port": 8086
     },
+
     "runtime": {
         "weather_source": "openmeteo_historical",
         "latitude": 38.91088,
@@ -16,6 +17,7 @@
         "time_acceleration": 1000,
         "state_variables": []
     },
+
     "observations": {
         "save_interval": "1hr",
         "noise_sigma": {
@@ -24,6 +26,7 @@
             "Underdrain flow": 0.02,
             "Pond water depth": 0.01
         },
+
         "noise_correlation_time": "6hr"
     }
 }
