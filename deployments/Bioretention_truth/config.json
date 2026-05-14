@@ -21,10 +21,10 @@
     "observations": {
         "save_interval": "1hr",
         "noise_sigma": {
-            "default": 0.0,
+            "default": 0.1,
             "Soil Moisture": 0.05,
-            "Underdrain flow": 0.02,
-            "Pond water depth": 0.01
+            "Underdrain flow": 0.1,
+            "Pond water depth": 0.1
         },
 
         "noise_correlation_time": "6hr"
