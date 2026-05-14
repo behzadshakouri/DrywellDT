@@ -25,6 +25,7 @@
 #include <QDateTime>
 #include <QString>
 
+#include <map>
 #include <string>
 
 // ---------------------------------------------------------------------------
@@ -73,8 +74,17 @@ public:
     TimeSeries<double> series(const std::string &name) const;
 
     // Observation noise standard deviation as reported by the meta sidecar.
+    // Supports legacy scalar noise_sigma and object-style noise_sigma maps.
+    // sigma() returns the default/fallback sigma.
     // 0 if no meta URL configured, or if the sidecar didn't provide one.
     double sigma() const { return m_sigma; }
+
+    // Optional object-style per-observation noise map parsed from the sidecar.
+    // Keys are normalized to lower-case, matching the config/runtime convention.
+    const std::map<std::string, double> &sigmaByPattern() const
+    {
+        return m_sigmaByPattern;
+    }
 
     // Diagnostics.
     bool      empty()           const;
@@ -99,17 +109,24 @@ private:
     bool parseCsv(const QByteArray &bytes, TimeSeriesSet<double> &out,
                   QString &outErr) const;
 
-    // Parse the sidecar JSON to extract the observation-noise sigma.
-    // Returns true on success; on failure leaves outSigma at 0 and writes
-    // a message to outErr.
-    bool parseMeta(const QByteArray &bytes, double &outSigma,
+    // Parse the sidecar JSON to extract observation-noise sigma information.
+    // Supports both:
+    //   { "noise_sigma": <double> }
+    //   { "observations": { "noise_sigma": <double-or-object> } }
+    // For object-style noise_sigma, outSigma receives the "default" entry
+    // when present, otherwise 0; outSigmaByPattern receives all non-default
+    // entries with lower-case keys.
+    bool parseMeta(const QByteArray &bytes,
+                   double &outSigma,
+                   std::map<std::string, double> &outSigmaByPattern,
                    QString &outErr) const;
 
     QString m_csvUrl;
     QString m_metaUrl;
 
-    TimeSeriesSet<double> m_obs;
-    double                m_sigma = 0.0;
-    QDateTime             m_lastRefresh;
+    TimeSeriesSet<double>       m_obs;
+    double                      m_sigma = 0.0;
+    std::map<std::string,double> m_sigmaByPattern;
+    QDateTime                   m_lastRefresh;
     QString               m_lastError;
 };
