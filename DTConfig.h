@@ -24,6 +24,7 @@
 #include <QString>
 #include <QtGlobal>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -44,18 +45,25 @@ struct StateVarExport
 //   saveIntervalMs        : cadence at which observation snapshots are written
 //                           (independent of the model integration step;
 //                           defaults to the runtime interval if omitted).
-//   noiseSigma            : standard deviation of the multiplicative
+//   noiseSigma            : default standard deviation of the multiplicative
 //                           log-normal noise applied to observed values:
 //                               x_obs = x_model * exp(sigma * epsilon)
 //                           where epsilon is an OU process with unit
-//                           stationary variance. 0 = noise disabled.
+//                           stationary variance. 0 = noise disabled unless
+//                           overridden per series in noiseSigmaByPattern.
+//   noiseSigmaByPattern   : optional per-observation sigma overrides. Keys
+//                           are lower-case substring patterns matched against
+//                           each observed-output series name. For example,
+//                           "soil moisture": 0.05 or "ert": 0.05.
+//                           The JSON key "default" maps to noiseSigma.
 //   noiseCorrelationTimeMs: correlation time tau of the OU process.
 //                           0 = white-noise limit.
 // ---------------------------------------------------------------------------
 struct ObservationConfig
 {
     qint64 saveIntervalMs         = 0;   // 0 sentinel -> fall back to runtime intervalMs
-    double noiseSigma             = 0.0;
+    double noiseSigma             = 0.0; // default / backward-compatible scalar
+    std::map<std::string, double> noiseSigmaByPattern;
     qint64 noiseCorrelationTimeMs = 0;
 };
 

@@ -30,6 +30,7 @@
 
 #include <cctype>
 #include <iostream>
+#include <algorithm>
 
 // ---------------------------------------------------------------------------
 // DTConfig::parseIntervalMs
@@ -267,6 +268,7 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     // Defaults: no noise (sigma=0, tau=0) and save at the runtime interval.
     observations.saveIntervalMs         = intervalMs;  // fallback: model interval
     observations.noiseSigma             = 0.0;
+    observations.noiseSigmaByPattern.clear();
     observations.noiseCorrelationTimeMs = 0;
 
     if (root.contains("observations"))
@@ -295,24 +297,80 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
             observations.saveIntervalMs = saveMs;
         }
 
-        // noise_sigma (double, dimensionless)
+        // noise_sigma (number or object/map, dimensionless)
+        // Backward-compatible scalar form:
+        //   "noise_sigma": 0.1
+        // Per-series override form:
+        //   "noise_sigma": {
+        //       "default": 0.1,
+        //       "soil moisture": 0.05,
+        //       "ert": 0.05,
+        //       "well_c": 0.02,
+        //       "precip": 0.0
+        //   }
+        // Object keys are lower-case substring patterns matched against the
+        // observed-output series name. "default" sets observations.noiseSigma.
         if (obs.contains("noise_sigma"))
         {
             const QJsonValue v = obs.value("noise_sigma");
-            if (!v.isDouble())
+
+            if (v.isDouble())
+            {
+                const double sigma = v.toDouble(0.0);
+                if (sigma < 0.0)
+                {
+                    errorMessage = "config.json observations.noise_sigma must be >= 0 "
+                                   "(got " + QString::number(sigma) + ")";
+                    return false;
+                }
+                observations.noiseSigma = sigma;
+            }
+            else if (v.isObject())
+            {
+                const QJsonObject obj = v.toObject();
+                for (auto it = obj.begin(); it != obj.end(); ++it)
+                {
+                    if (!it.value().isDouble())
+                    {
+                        errorMessage =
+                            "config.json observations.noise_sigma['" + it.key() +
+                            "'] must be a number";
+                        return false;
+                    }
+
+                    const double sigma = it.value().toDouble(0.0);
+                    if (sigma < 0.0)
+                    {
+                        errorMessage =
+                            "config.json observations.noise_sigma['" + it.key() +
+                            "'] must be >= 0 (got " + QString::number(sigma) + ")";
+                        return false;
+                    }
+
+                    QString keyQ = it.key().trimmed().toLower();
+                    if (keyQ.isEmpty())
+                    {
+                        errorMessage =
+                            "config.json observations.noise_sigma contains an empty key";
+                        return false;
+                    }
+
+                    if (keyQ == "default")
+                    {
+                        observations.noiseSigma = sigma;
+                    }
+                    else
+                    {
+                        observations.noiseSigmaByPattern[keyQ.toStdString()] = sigma;
+                    }
+                }
+            }
+            else
             {
                 errorMessage =
-                    "config.json observations.noise_sigma must be a number";
+                    "config.json observations.noise_sigma must be a number or object";
                 return false;
             }
-            const double sigma = v.toDouble(0.0);
-            if (sigma < 0.0)
-            {
-                errorMessage = "config.json observations.noise_sigma must be >= 0 "
-                               "(got " + QString::number(sigma) + ")";
-                return false;
-            }
-            observations.noiseSigma = sigma;
         }
 
         // noise_correlation_time (string, same syntax as runtime.interval)
@@ -464,12 +522,24 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
     std::cout << "[Config] obs.save_interval : " << observations.saveIntervalMs
               << " ms\n"
               << "[Config] obs.noise_sigma   : " << observations.noiseSigma
-              << "\n"
-              << "[Config] obs.noise_corr_t  : "
+              << "\n";
+
+    if (!observations.noiseSigmaByPattern.empty())
+    {
+        std::cout << "[Config] obs.noise_by_name : ";
+        for (const auto &kv : observations.noiseSigmaByPattern)
+            std::cout << "'" << kv.first << "'=" << kv.second << " ";
+        std::cout << "\n";
+    }
+
+    const bool obsNoiseEnabled =
+        (observations.noiseSigma > 0.0) || !observations.noiseSigmaByPattern.empty();
+
+    std::cout << "[Config] obs.noise_corr_t  : "
               << observations.noiseCorrelationTimeMs << " ms";
-    if (observations.noiseCorrelationTimeMs == 0 && observations.noiseSigma > 0.0)
+    if (observations.noiseCorrelationTimeMs == 0 && obsNoiseEnabled)
         std::cout << " (white-noise limit)";
-    if (observations.noiseSigma == 0.0)
+    if (!obsNoiseEnabled)
         std::cout << " (noise disabled)";
     std::cout << "\n";
 
