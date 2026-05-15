@@ -207,8 +207,14 @@ private:
     //
     // No-op if sigma <= 0.
     void applyOUNoiseStateful(TimeSeriesSet<double> &set,
-                              double sigma,
+                              double defaultSigma,
                               double tauDays);
+
+    // Return the noise sigma for one observed-output series. The default
+    // value comes from observations.noiseSigma; optional entries in
+    // observations.noiseSigmaByPattern override it when their lower-case
+    // key appears as a substring of the lower-case series name.
+    double observationNoiseSigmaForSeries(const std::string &seriesName) const;
 
     // Write outputs/selected_output_meta.json describing the noise model
     // used to generate selected_output.csv (sigma, tau, save_interval, ts).

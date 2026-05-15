@@ -90,10 +90,12 @@ bool DTObservationBuffer::refresh()
         if (fetchToBytes(m_metaUrl, metaBytes, metaFetchErr))
         {
             double sigma = 0.0;
+            std::map<std::string, double> sigmaByPattern;
             QString metaParseErr;
-            if (parseMeta(metaBytes, sigma, metaParseErr))
+            if (parseMeta(metaBytes, sigma, sigmaByPattern, metaParseErr))
             {
                 m_sigma = sigma;
+                m_sigmaByPattern = std::move(sigmaByPattern);
             }
             else
             {
@@ -110,7 +112,14 @@ bool DTObservationBuffer::refresh()
 
     std::cout << "[ObsBuf] refreshed from " << m_csvUrl.toStdString()
               << " — " << variableCount() << " series, "
-              << pointCount() << " points, sigma=" << m_sigma << "\n";
+              << pointCount() << " points, sigma=" << m_sigma;
+    if (!m_sigmaByPattern.empty())
+    {
+        std::cout << ", sigma_by_name=";
+        for (const auto &kv : m_sigmaByPattern)
+            std::cout << "'" << kv.first << "'=" << kv.second << " ";
+    }
+    std::cout << "\n";
 
     return true;
 }
@@ -323,15 +332,22 @@ bool DTObservationBuffer::parseCsv(const QByteArray &bytes,
 //
 // Looks for one of:
 //     { "observations": { "noise_sigma": <double>, ... } }
+//     { "observations": { "noise_sigma": { "default": <double>, ... }, ... } }
 //     { "noise_sigma": <double> }
+//     { "noise_sigma": { "default": <double>, ... } }
 //
-// Both shapes are tolerated to keep this loosely coupled to the Truth
-// Twin's exact sidecar layout.
+// Both the legacy scalar shape and the object-style per-observation shape are
+// tolerated to keep this loosely coupled to the Truth Twin's exact sidecar
+// layout.
 // ---------------------------------------------------------------------------
 bool DTObservationBuffer::parseMeta(const QByteArray &bytes,
                                     double &outSigma,
+                                    std::map<std::string, double> &outSigmaByPattern,
                                     QString &outErr) const
 {
+    outSigma = 0.0;
+    outSigmaByPattern.clear();
+
     QJsonParseError perr;
     const QJsonDocument doc = QJsonDocument::fromJson(bytes, &perr);
     if (doc.isNull())
@@ -346,17 +362,62 @@ bool DTObservationBuffer::parseMeta(const QByteArray &bytes,
     }
     const QJsonObject root = doc.object();
 
-    auto extract = [&](const QJsonObject &o) -> bool {
-        const QJsonValue v = o.value("noise_sigma");
-        if (v.isDouble()) { outSigma = v.toDouble(); return true; }
+    auto parseNoiseSigmaValue = [&](const QJsonValue &v,
+                                    const QString &where) -> bool {
+        if (v.isDouble())
+        {
+            const double sigma = v.toDouble(0.0);
+            if (sigma < 0.0)
+            {
+                outErr = where + " must be >= 0";
+                return false;
+            }
+            outSigma = sigma;
+            return true;
+        }
+
+        if (v.isObject())
+        {
+            const QJsonObject obj = v.toObject();
+
+            for (auto it = obj.begin(); it != obj.end(); ++it)
+            {
+                if (!it.value().isDouble())
+                {
+                    outErr = where + "['" + it.key() + "'] must be a number";
+                    return false;
+                }
+
+                const double sigma = it.value().toDouble(0.0);
+                if (sigma < 0.0)
+                {
+                    outErr = where + "['" + it.key() + "'] must be >= 0";
+                    return false;
+                }
+
+                const QString key = it.key().trimmed().toLower();
+                if (key == "default")
+                    outSigma = sigma;
+                else if (!key.isEmpty())
+                    outSigmaByPattern[key.toStdString()] = sigma;
+            }
+
+            return true;
+        }
+
+        outErr = where + " must be a number or object";
         return false;
     };
 
-    if (extract(root)) return true;
+    if (root.contains("noise_sigma"))
+        return parseNoiseSigmaValue(root.value("noise_sigma"), "noise_sigma");
 
     if (root.contains("observations") && root.value("observations").isObject())
     {
-        if (extract(root.value("observations").toObject())) return true;
+        const QJsonObject obs = root.value("observations").toObject();
+        if (obs.contains("noise_sigma"))
+            return parseNoiseSigmaValue(obs.value("noise_sigma"),
+                                        "observations.noise_sigma");
     }
 
     outErr = "meta JSON has no 'noise_sigma' field at root or under 'observations'";

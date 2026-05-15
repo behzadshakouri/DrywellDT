@@ -157,14 +157,25 @@ DTRunner::DTRunner(const DTConfig &config, QObject *parent)
 
     std::cout << "[Runner] obs save interval : "
               << m_obsSaveIntervalDays << " day(s)\n";
-    if (config.observations.noiseSigma > 0.0)
+    const bool obsNoiseEnabled =
+        (config.observations.noiseSigma > 0.0) ||
+        !config.observations.noiseSigmaByPattern.empty();
+
+    if (obsNoiseEnabled)
     {
         const double tauDays =
             static_cast<double>(config.observations.noiseCorrelationTimeMs)
             / (86400.0 * 1000.0);
-        std::cout << "[Runner] obs noise sigma   : "
-                  << config.observations.noiseSigma << "\n"
-                  << "[Runner] obs noise tau     : " << tauDays
+        std::cout << "[Runner] obs noise default : "
+                  << config.observations.noiseSigma << "\n";
+        if (!config.observations.noiseSigmaByPattern.empty())
+        {
+            std::cout << "[Runner] obs noise by name : ";
+            for (const auto &kv : config.observations.noiseSigmaByPattern)
+                std::cout << "'" << kv.first << "'=" << kv.second << " ";
+            std::cout << "\n";
+        }
+        std::cout << "[Runner] obs noise tau     : " << tauDays
                   << " day(s)";
         if (tauDays <= 0.0) std::cout << " (white-noise limit)";
         std::cout << "\n";
@@ -634,7 +645,8 @@ bool DTRunner::runOnce()
         //         using an OU process whose state persists across
         //         cycles (m_ouState). No-op if sigma == 0.
         // ------------------------------------------------------------
-        if (m_config.observations.noiseSigma > 0.0)
+        if (m_config.observations.noiseSigma > 0.0 ||
+            !m_config.observations.noiseSigmaByPattern.empty())
         {
             const double tauDays =
                 static_cast<double>(m_config.observations.noiseCorrelationTimeMs)
@@ -1263,11 +1275,25 @@ void DTRunner::injectPrecipitation(System *system, const CPrecipitation &precip)
 // τ <= 0 is treated as the white-noise limit (each point gets an independent
 // N(0,1) draw). σ <= 0 is a no-op.
 // ---------------------------------------------------------------------------
+double DTRunner::observationNoiseSigmaForSeries(const std::string &seriesName) const
+{
+    const std::string n = dtLowerCopy(seriesName);
+
+    for (const auto &kv : m_config.observations.noiseSigmaByPattern)
+    {
+        if (!kv.first.empty() && n.find(kv.first) != std::string::npos)
+            return kv.second;
+    }
+
+    return m_config.observations.noiseSigma;
+}
+
 void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
-                                    double sigma,
+                                    double defaultSigma,
                                     double tauDays)
 {
-    if (sigma <= 0.0) return;
+    if (defaultSigma <= 0.0 && m_config.observations.noiseSigmaByPattern.empty())
+        return;
     if (set.empty()) return;
 
     // One shared RNG for the whole process. random_device seeds it once.
@@ -1283,6 +1309,8 @@ void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
 
         // Name-indexed: robust against OHQ reordering observed outputs.
         const std::string seriesKey = ts.name();
+        const double seriesSigma = observationNoiseSigmaForSeries(seriesKey);
+        if (seriesSigma <= 0.0) continue;
 
         // Initialize or fetch the persisted OU state for this series.
         double eps;
@@ -1319,7 +1347,7 @@ void DTRunner::applyOUNoiseStateful(TimeSeriesSet<double> &set,
             }
 
             const double clean = ts.getValue(i);
-            const double noised = clean * std::exp(sigma * eps);
+            const double noised = clean * std::exp(seriesSigma * eps);
             ts.setValue(i, noised);
         }
 
@@ -1341,7 +1369,18 @@ bool DTRunner::writeMetadataSidecar() const
     obsBlock["save_interval_ms"] =
         static_cast<qint64>(m_config.observations.saveIntervalMs);
     obsBlock["save_interval_days"] = m_obsSaveIntervalDays;
-    obsBlock["noise_sigma"] = m_config.observations.noiseSigma;
+    if (m_config.observations.noiseSigmaByPattern.empty())
+    {
+        obsBlock["noise_sigma"] = m_config.observations.noiseSigma;
+    }
+    else
+    {
+        QJsonObject sigmaObj;
+        sigmaObj["default"] = m_config.observations.noiseSigma;
+        for (const auto &kv : m_config.observations.noiseSigmaByPattern)
+            sigmaObj[QString::fromStdString(kv.first)] = kv.second;
+        obsBlock["noise_sigma"] = sigmaObj;
+    }
     obsBlock["noise_correlation_time_ms"] =
         static_cast<qint64>(m_config.observations.noiseCorrelationTimeMs);
     obsBlock["noise_correlation_time_days"] =
