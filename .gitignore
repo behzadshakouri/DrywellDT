@@ -120,3 +120,5 @@ deployments/VN/model/output.txt
 deployments/VN/outputs_0/
 
 deployments/VN/outputs_1/
+
+*.png
