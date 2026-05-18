@@ -523,10 +523,20 @@ bool DTAssimilation::runCalibration(QString &errorMessage)
     }
 
     // 10. Write a new state snapshot reflecting the calibrated parameters.
-    const QString stamp = QDateTime::currentDateTimeUtc()
-                              .toString("yyyyMMdd_HHmmss");
-    const QString newSnapshotPath = calibDir
-                                    + "/state_calibrated_" + stamp + ".json";
+    // In debug mode each cycle is timestamped and kept; otherwise we
+    // overwrite a single fixed file so the calibration dir stays bounded
+    // on long runs. DTRunner picks up whatever path is signaled.
+    QString newSnapshotPath;
+    if (m_config.keepDebugOutputs)
+    {
+        const QString stamp = QDateTime::currentDateTimeUtc()
+        .toString("yyyyMMdd_HHmmss");
+        newSnapshotPath = calibDir + "/state_calibrated_" + stamp + ".json";
+    }
+    else
+    {
+        newSnapshotPath = calibDir + "/state_calibrated_latest.json";
+    }
     if (!sys.SavetoJson(newSnapshotPath.toStdString(), {}, false, false))
     {
         errorMessage = "failed to write calibrated snapshot: " + newSnapshotPath;

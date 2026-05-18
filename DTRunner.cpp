@@ -805,11 +805,14 @@ StageResult DTRunner::runStage(StageKind kind,
         stageStart, stageEnd);
 
     {
-        const QString precipFile =
-            QString::fromStdString(m_config.outputDir) + "/" +
-            stageStart.toString("yyyyMMdd_HHmmss") + "_" +
-            (isAdvance ? "advance" : "forecast") + "_precipitation.txt";
-        precip.writefile(precipFile.toStdString());
+        if (m_config.keepDebugOutputs)
+        {
+            const QString precipFile =
+                QString::fromStdString(m_config.outputDir) + "/" +
+                stageStart.toString("yyyyMMdd_HHmmss") + "_" +
+                (isAdvance ? "advance" : "forecast") + "_precipitation.txt";
+            precip.writefile(precipFile.toStdString());
+        }
     }
     DTWeather::injectPrecipitation(ohqSystem.get(), precip);
 
@@ -825,8 +828,8 @@ StageResult DTRunner::runStage(StageKind kind,
     DTWeather::injectWeather(ohqSystem.get(), etSource, "Temperature", temp);
 
     const auto rh = DTWeather::fetchWeatherVariable(
-        m_config.weatherSource, "relative_humidity_2m",
-        m_config.latitude, m_config.longitude, stageStart, stageEnd)/100.00;
+                        m_config.weatherSource, "relative_humidity_2m",
+                        m_config.latitude, m_config.longitude, stageStart, stageEnd)/100.00;
     DTWeather::injectWeather(ohqSystem.get(), etSource, "R_h", rh);
 
     const auto wind = DTWeather::fetchWeatherVariable(
@@ -851,9 +854,16 @@ StageResult DTRunner::runStage(StageKind kind,
         QString::fromStdString(m_config.outputDir) + "/" +
         stageStart.toString("yyyyMMdd_HHmmss") + stageTag;
 
-    std::cout << "[Runner] Writing output to: " << outputFile.toStdString() << "\n";
-    ohqSystem->GetObservedOutputs().write(outputFile.toStdString());
-    result.outputFilePath = outputFile;
+    if (m_config.keepDebugOutputs)
+    {
+        std::cout << "[Runner] Writing output to: " << outputFile.toStdString() << "\n";
+        ohqSystem->GetObservedOutputs().write(outputFile.toStdString());
+        result.outputFilePath = outputFile;
+    }
+    else
+    {
+        result.outputFilePath.clear();   // not written this cycle
+    }
 
     // Capture the observed outputs for the (future) merge step.
     result.observed = ohqSystem->GetObservedOutputs();
@@ -867,10 +877,15 @@ StageResult DTRunner::runStage(StageKind kind,
         for (const auto &exp : m_config.stateVarExports)
             ohqSystem->SaveStateVariableToJson(exp.variable, exp.outputPath);
 
-        // Save model snapshot (drives next cycle)
-        const QString modelSnapshotPath =
-            QString::fromStdString(m_config.modelSnapshotDir) + "/" +
-            stageStart.toString("yyyyMMdd_HHmmss") + "_model.json";
+        // Save model snapshot (drives next cycle, and is read by the
+        // assimilation loop via setLatestSnapshot()). In debug mode each
+        // cycle is timestamped and archived; otherwise we overwrite a
+        // single fixed file to keep snapshots/ bounded on long runs.
+        const QString modelSnapshotPath = m_config.keepDebugOutputs
+                                              ? (QString::fromStdString(m_config.modelSnapshotDir) + "/" +
+                                                 stageStart.toString("yyyyMMdd_HHmmss") + "_model.json")
+                                              : (QString::fromStdString(m_config.modelSnapshotDir) +
+                                                 "/_latest_model.json");
         ohqSystem->SavetoJson(modelSnapshotPath.toStdString(),
                               ohqSystem->addedtemplates, false, true);
 
@@ -898,7 +913,8 @@ StageResult DTRunner::runStage(StageKind kind,
         savedState["_dt_interval_end_utc"]   = stageEnd.toString(Qt::ISODate);
         savedState["_dt_next_start_utc"]     = stageEnd.toString(Qt::ISODate);
         savedState["_dt_runs_completed"]     = m_runsCompleted + 1;
-        savedState["_dt_output_file"]        = outputFile;
+        savedState["_dt_output_file"]        =
+            m_config.keepDebugOutputs ? outputFile : QString();
 
         const QString snapshotPath =
             QString::fromStdString(m_config.stateDir) + "/" +

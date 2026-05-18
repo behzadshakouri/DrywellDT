@@ -216,6 +216,9 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
         return false;
     }
 
+    advanceToObservations = rt.value("advance_to_observations").toBool(false);
+    keepDebugOutputs      = rt.value("keep_debug_outputs").toBool(false);
+
     QString intervalErr;
     intervalMs = parseIntervalMs(intervalStr, intervalErr);
     if (intervalMs < 0)
@@ -559,6 +562,9 @@ bool DTConfig::load(const QString &deploymentRootIn, QString &errorMessage)
 
     std::cout << "[Config] advance_to_obs   : "
               << (advanceToObservations ? "true" : "false") << "\n";
+
+    std::cout << "[Config] keep_debug_outputs: "
+              << (keepDebugOutputs ? "true" : "false") << "\n";
 
     if (assimilation.enabled)
     {

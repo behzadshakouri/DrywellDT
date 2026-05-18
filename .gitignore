@@ -128,3 +128,7 @@ viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Debug/.qtc_clangd/
 viewer/build/WebAssembly_Qt_6_8_2_multi_threaded-Debug/
 
 *.png
+
+build/dubug/.qtc_clangd/.cache/clangd/index/
+
+build/dubug/.qtc_clangd/

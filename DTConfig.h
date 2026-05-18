@@ -173,6 +173,27 @@ public:
     // Default false preserves the existing fixed-interval behavior.
     bool        advanceToObservations = false;
 
+    // --- debug output retention ---
+    // When false (default), per-cycle diagnostic files are suppressed:
+    //
+    //   outputs/<stamp>_output.txt
+    //   outputs/<stamp>_forecast_output.txt
+    //   outputs/<stamp>_advance_precipitation.txt
+    //   outputs/<stamp>_forecast_precipitation.txt
+    //   snapshots/<stamp>_model.json   (replaced by snapshots/_latest_model.json)
+    //   <calibration_output_dir>/state_calibrated_<stamp>.json
+    //                                  (replaced by state_calibrated_latest.json)
+    //
+    // Single-file outputs needed by the viewer (viz.svg, viz_state.json,
+    // forecast_viz.svg, selected_output.csv, selected_output_meta.json) and
+    // accumulating logs needed for analysis (ga_output.txt,
+    // ga_output_merged.txt, parameter_history.csv) are always written.
+    //
+    // On a server running indefinitely, leave this off to keep disk usage
+    // bounded. Turn on temporarily for development / debugging when a full
+    // per-cycle audit trail is needed.
+    bool        keepDebugOutputs = false;
+
     // --- forecast horizon ---
     // Optional duration of Stage B forecast window beyond the advance interval.
     // Same syntax as intervalStr. Empty / 0 = forecast disabled.
@@ -207,5 +228,3 @@ private:
     // Empty input returns empty.
     QString resolvePath(const QString &p) const;
 };
-
-
