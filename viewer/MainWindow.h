@@ -3,6 +3,7 @@
 #include "CsvLoader.h"
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QMainWindow>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -51,7 +52,15 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    // Constructor takes the parsed root config (for shared keys like
+    // refresh_seconds) and the "forward" sub-object (for csv_url, viz_url,
+    // etc.). configBaseUrl is the URL the config was loaded from — used
+    // to resolve relative URLs in the sub-object (e.g. "viz.svg" becomes
+    // a sibling of config.json on the same host).
+    explicit MainWindow(const QJsonObject &rootConfig,
+                        const QJsonObject &forwardConfig,
+                        const QUrl        &configBaseUrl,
+                        QWidget *parent = nullptr);
 
 private slots:
     void onRefreshClicked();
@@ -88,10 +97,6 @@ private:
     // Load the cached SVG for the currently selected mode into the widget.
     void applySvgForCurrentMode();
 
-    // Config loading.
-    void loadConfig();
-    void onConfigReply(QNetworkReply *reply);
-
     // Top-bar widgets.
     QSpinBox    *m_intervalSpin  = nullptr;
     QSpinBox    *m_lastNSpin     = nullptr;
@@ -108,8 +113,6 @@ private:
     QUrl m_url;
     int  m_refreshSeconds = 300;      // default 5 minutes, editable from UI
     int  m_lastN          = 0;        // 0 = show all points
-
-    QNetworkAccessManager m_configNam;
 
     // SVG pane.
     QSvgWidget  *m_svgWidget    = nullptr;

@@ -20,9 +20,7 @@ HEADERS += \
     OhqTime.h
 
 DISTFILES += \
-    config.json \
-    config_assimilation.json \
-    config_forward.json
+    config.json
 
 # Copy viewer config next to the binary when present in the project folder.
 # Safe for desktop builds; for WASM deployment, keep config.json beside the

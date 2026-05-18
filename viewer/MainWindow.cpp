@@ -1,7 +1,3 @@
-#ifdef __EMSCRIPTEN__
-#include <emscripten/val.h>
-#endif
-
 #include "MainWindow.h"
 #include "OhqTime.h"
 
@@ -90,11 +86,55 @@ static QUrl resolvedConfigUrl(const QUrl &configUrl, const QString &value)
 static constexpr const char *kDefaultCsvUrl =
     "http://localhost/selected_output.csv";
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
+MainWindow::MainWindow(const QJsonObject &rootConfig,
+                       const QJsonObject &forwardConfig,
+                       const QUrl        &configBaseUrl,
+                       QWidget *parent)
+    : QMainWindow(parent)
 {
     setWindowTitle("OHTwin Viewer");
 
-    m_url = QUrl(QString::fromLatin1(kDefaultCsvUrl));
+    // ------------------------------------------------------------------
+    // Absorb config values up front. Relative URLs are resolved against
+    // configBaseUrl so "viz.svg" becomes a sibling of config.json on the
+    // same host. refresh_seconds may live at the root or in the forward
+    // sub-block; the sub-block wins if both are present.
+    // ------------------------------------------------------------------
+    {
+        const QString csv = forwardConfig.value("csv_url").toString();
+        m_url = csv.isEmpty()
+            ? QUrl(QString::fromLatin1(kDefaultCsvUrl))
+            : resolvedConfigUrl(configBaseUrl, csv);
+
+        const QString viz = forwardConfig.value("viz_url").toString();
+        if (!viz.isEmpty())
+            m_vizUrl = resolvedConfigUrl(configBaseUrl, viz);
+
+        const QString vizS = forwardConfig.value("viz_state_url").toString();
+        if (!vizS.isEmpty())
+            m_vizStateUrl = resolvedConfigUrl(configBaseUrl, vizS);
+
+        const QString fviz = forwardConfig.value("forecast_viz_url").toString();
+        if (!fviz.isEmpty())
+            m_forecastVizUrl = resolvedConfigUrl(configBaseUrl, fviz);
+
+        const QString fvizS = forwardConfig.value("forecast_viz_state_url").toString();
+        if (!fvizS.isEmpty())
+            m_forecastVizStateUrl = resolvedConfigUrl(configBaseUrl, fvizS);
+
+        // refresh_seconds: forward sub-block overrides root.
+        if (forwardConfig.contains("refresh_seconds"))
+            m_refreshSeconds = forwardConfig.value("refresh_seconds").toInt(m_refreshSeconds);
+        else if (rootConfig.contains("refresh_seconds"))
+            m_refreshSeconds = rootConfig.value("refresh_seconds").toInt(m_refreshSeconds);
+
+        qDebug() << "Config: csv="          << m_url
+                 << "viz="                  << m_vizUrl
+                 << "viz_state="            << m_vizStateUrl
+                 << "forecast_viz="         << m_forecastVizUrl
+                 << "forecast_viz_state="   << m_forecastVizStateUrl
+                 << "refresh_seconds="      << m_refreshSeconds;
+    }
 
     auto *central = new QWidget(this);
     auto *root    = new QVBoxLayout(central);
@@ -119,7 +159,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     topBar->addWidget(new QLabel("Refresh (s)"));
     m_intervalSpin = new QSpinBox();
     m_intervalSpin->setRange(5, 24 * 3600);
-    m_intervalSpin->setValue(m_refreshSeconds);
+    m_intervalSpin->setValue(m_refreshSeconds);    // now reflects config
     m_intervalSpin->setFixedWidth(90);
     topBar->addWidget(m_intervalSpin);
 
@@ -254,80 +294,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_forecastBtn, &QPushButton::clicked, this, &MainWindow::onModeToggled);
 
     m_timer.setInterval(m_refreshSeconds * 1000);
-    // Don't start timer or fetch yet — wait for config
-    loadConfig();
-}
-
-void MainWindow::loadConfig()
-{
-    QUrl configUrl;
-
-#ifdef __EMSCRIPTEN__
-    std::string href = emscripten::val::global("window")["location"]["href"].as<std::string>();
-    QUrl pageUrl(QString::fromStdString(href));
-    configUrl = pageUrl.resolved(QUrl("config.json"));
-#else
-    configUrl = QUrl::fromLocalFile(
-        QCoreApplication::applicationDirPath() + "/config.json");
-#endif
-
-    // Cache-bust config.json so deployment edits are picked up immediately.
-    QNetworkReply *reply = m_configNam.get(noCacheRequest(configUrl));
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        onConfigReply(reply);
-    });
-}
-
-void MainWindow::onConfigReply(QNetworkReply *reply)
-{
-    const QUrl configUrl = reply->url();
-
-    if (reply->error() == QNetworkReply::NoError) {
-        QJsonParseError parseError;
-        const QByteArray data = reply->readAll();
-        const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
-
-        if (!doc.isObject()) {
-            qDebug() << "Config parse error:" << parseError.errorString();
-            m_statusLabel->setText(statusHtml("#EF4444",
-                                               "Config parse error: " + parseError.errorString()));
-        } else {
-            const QJsonObject obj = doc.object();
-
-            const QString csv = obj.value("csv_url").toString();
-            if (!csv.isEmpty())
-                m_url = resolvedConfigUrl(configUrl, csv);
-
-            const QString viz = obj.value("viz_url").toString();
-            if (!viz.isEmpty())
-                m_vizUrl = resolvedConfigUrl(configUrl, viz);
-
-            const QString vizS = obj.value("viz_state_url").toString();
-            if (!vizS.isEmpty())
-                m_vizStateUrl = resolvedConfigUrl(configUrl, vizS);
-
-            const QString fviz = obj.value("forecast_viz_url").toString();
-            if (!fviz.isEmpty())
-                m_forecastVizUrl = resolvedConfigUrl(configUrl, fviz);
-
-            const QString fvizS = obj.value("forecast_viz_state_url").toString();
-            if (!fvizS.isEmpty())
-                m_forecastVizStateUrl = resolvedConfigUrl(configUrl, fvizS);
-
-            qDebug() << "Config: csv="          << m_url
-                     << "viz="                  << m_vizUrl
-                     << "viz_state="            << m_vizStateUrl
-                     << "forecast_viz="         << m_forecastVizUrl
-                     << "forecast_viz_state="   << m_forecastVizStateUrl;
-        }
-    } else {
-        qDebug() << "Config load error:" << reply->error() << reply->errorString();
-        m_statusLabel->setText(statusHtml("#EF4444",
-                                           "Config load error: " + reply->errorString()));
-    }
-
-    reply->deleteLater();
-
     m_timer.start();
     onRefreshClicked();
 }

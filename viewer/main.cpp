@@ -1,11 +1,25 @@
-#include "MainWindow.h"
+// main.cpp
+//
+// Entry point for DrywellDTViewer. Loads config.json via Bootstrapper,
+// which then creates either MainWindow (forward mode) or AssimViewer
+// (assimilation mode).
+//
+// Desktop only: an alternative config file can be supplied via
+//   DrywellDTViewer --config /path/to/myconfig.json
+// On WASM the argument is ignored; the config is always fetched
+// relative to the page URL.
+
+#include "Bootstrapper.h"
 
 #include <QApplication>
-#include <QFont>
 #include <QStyleFactory>
 
-// Modern light theme — Fusion base + QSS overlay.
-// Kept inline here so the viewer's visual style stays in one place.
+#ifndef Q_OS_WASM
+#  include <QCommandLineOption>
+#  include <QCommandLineParser>
+#  include <QCoreApplication>
+#endif
+
 static const char *kAppStyleSheet = R"QSS(
     QWidget {
         font-family: "Inter", "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -82,13 +96,32 @@ static const char *kAppStyleSheet = R"QSS(
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    QApplication::setApplicationName("DrywellDTViewer");
 
-    // Fusion renders consistently across desktop and Qt/WASM builds.
     QApplication::setStyle(QStyleFactory::create("Fusion"));
     app.setStyleSheet(QString::fromUtf8(kAppStyleSheet));
 
-    MainWindow w;
-    w.show();
+    Bootstrapper bs;
+
+#ifndef Q_OS_WASM
+    // Desktop only: --config /path/to/file.json overrides the default
+    // location (<applicationDirPath>/config.json).
+    QCommandLineParser parser;
+    parser.setApplicationDescription(
+        "OHTwin viewer. Reads config.json next to the binary by default; "
+        "use --config to point at a different file.");
+    parser.addHelpOption();
+    QCommandLineOption configOpt(
+        QStringList{ "c", "config" },
+        "Path to a config.json file.", "path");
+    parser.addOption(configOpt);
+    parser.process(app);
+
+    if (parser.isSet(configOpt))
+        bs.setConfigPath(parser.value(configOpt));
+#endif
+
+    bs.start();
 
     return app.exec();
 }
