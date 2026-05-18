@@ -115,9 +115,9 @@ static int dtSelectedOutputRank(const std::string &seriesName)
     return 50;
 }
 
-static bool dtNeedsCustomOrdering(const QString &deploymentName)
+static bool dtNeedsCustomOrdering(const std::string &deploymentName)
 {
-    const QString d = deploymentName.trimmed().toLower();
+    const std::string d = dtLowerCopy(deploymentName);
 
     // Keep historical custom viewer ordering only for these deployments.
     // All other models preserve the original OHQ observation/output order.
@@ -130,7 +130,7 @@ static bool dtNeedsCustomOrdering(const QString &deploymentName)
 
 static TimeSeriesSet<double> dtReorderSelectedOutput(
     const TimeSeriesSet<double> &src,
-    const QString &deploymentName)
+    const std::string &deploymentName)
 {
     if (!dtNeedsCustomOrdering(deploymentName))
         return src;
