@@ -20,9 +20,9 @@ set datafile commentschars "#t"
 NSEL = 18
 
 # Column mapping in selected_output.csv.
-C_UND_T  = 3;  C_UND_Y  = 4
-C_POND_T = 15; C_POND_Y = 16
-C_SOIL_T = 17; C_SOIL_Y = 18
+C_UND_T  = 17; C_UND_Y  = 18
+C_POND_T = 11; C_POND_Y = 12
+C_SOIL_T = 15; C_SOIL_Y = 16
 
 # Event window. Residual plots are intentionally event-focused so that
 # corrections do not disappear over long dry periods.

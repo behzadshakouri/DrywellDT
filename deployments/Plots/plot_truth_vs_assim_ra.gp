@@ -124,9 +124,9 @@ plot truth_file      using (($11-25569)*86400):12 with linespoints ls 1 title "t
 # (reanalysis has inflow at cols 15:16 due to alphabetical ordering)
 set title "Inflow to the pond (m^3/day)"
 set ylabel "m^3/day"
-plot truth_file      using (($13-25569)*86400):14 with linespoints ls 1 title "truth", \
-     assim_file      using (($13-25569)*86400):14 with linespoints ls 2 title "assim", \
-     reanalysis_file using (($15-25569)*86400):16 with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($7-25569)*86400):8 with linespoints ls 1 title "truth", \
+     assim_file      using (($7-25569)*86400):8 with linespoints ls 2 title "assim", \
+     reanalysis_file using (($7-25569)*86400):8 with linespoints ls 3 title "reanalysis"
 
 # --- Panel 8: Soil Moisture ----------------------------------------------
 # (reanalysis has Soil Moisture at cols 11:12 due to alphabetical ordering)
