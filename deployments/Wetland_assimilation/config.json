@@ -1,0 +1,51 @@
+{
+    "deployment": {
+        "name": "Wetland_assimilation",
+        "model_file": "model/Wetland.ohq",
+        "viz_file": "viz_wetland.json",
+        "port": 8089
+    },
+    "runtime": {
+        "weather_source": "openmeteo_historical",
+        "latitude": 38.91088,
+        "longitude": -76.98569,
+        "interval": "1day",
+        "forecast_horizon": "",
+        "start_datetime": "2020-01-03T00:00:00",
+        "stop_datetime": "",
+        "time_acceleration": 1000,
+        "advance_to_observations": true,
+        "state_variables": []
+    },
+    "observations": {
+        "save_interval": "1hr",
+        "noise_sigma": {
+            "default": 0.0,
+            "Precipitation (mm/day)": 0.0,
+            "Wetland inflow (m3/day)": 0.0,
+            "Wetland inlet stage (m)": 0.0,
+            "Wetland mid-stage (m)": 0.0,
+            "Wetland outlet stage (m)": 0.0,
+            "Wetland outflow (m3/day)": 0.0,
+            "Wetland Cell 1 storage (m3)": 0.0,
+            "Wetland Cell 2 storage (m3)": 0.0,
+            "Wetland Cell 3 storage (m3)": 0.0,
+            "Wetland Cell 4 storage (m3)": 0.0,
+            "Wetland Cell 5 storage (m3)": 0.0,
+            "Wetland Cell 6 storage (m3)": 0.0
+        },
+        "noise_correlation_time": "6hr"
+    },
+    "assimilation": {
+        "truth_csv_url": "http://localhost:8088/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8088/outputs/selected_output_meta.json",
+        "poll_interval": "3day",
+        "calibration_output_dir": "outputs/calibration",
+        "calibration_observations": [
+            "Wetland outflow (m3/day)",
+            "Wetland inlet stage (m)",
+            "Wetland mid-stage (m)",
+            "Wetland outlet stage (m)"
+        ]
+    }
+}
