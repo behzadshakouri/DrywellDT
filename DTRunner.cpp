@@ -115,21 +115,44 @@ static int dtSelectedOutputRank(const std::string &seriesName)
     return 50;
 }
 
-static TimeSeriesSet<double> dtReorderSelectedOutput(const TimeSeriesSet<double> &src)
+static bool dtNeedsCustomOrdering(const QString &deploymentName)
 {
+    const QString d = deploymentName.trimmed().toLower();
+
+    // Keep historical custom viewer ordering only for these deployments.
+    // All other models preserve the original OHQ observation/output order.
+    return d == "vn"
+        || d == "vn_drywell"
+        || d == "r"
+        || d == "hq"
+        || d == "hq_drywell";
+}
+
+static TimeSeriesSet<double> dtReorderSelectedOutput(
+    const TimeSeriesSet<double> &src,
+    const QString &deploymentName)
+{
+    if (!dtNeedsCustomOrdering(deploymentName))
+        return src;
+
     std::vector<size_t> idx(src.size());
     for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
 
     std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) {
         const int ra = dtSelectedOutputRank(src[a].name());
         const int rb = dtSelectedOutputRank(src[b].name());
-        if (ra != rb) return ra < rb;
-        return src[a].name() < src[b].name();
+
+        if (ra != rb)
+            return ra < rb;
+
+        // Preserve original OHQ order inside each priority group.
+        return a < b;
     });
 
     TimeSeriesSet<double> out;
     for (size_t i : idx)
         out.push_back(src[i]);
+
     return out;
 }
 }
@@ -1093,7 +1116,7 @@ bool DTRunner::mergeIntoSelectedOutput(const TimeSeriesSet<double> &advanceObs,
     // ------------------------------------------------------------------
     // 5. Reorder and write back (full file with header)
     // ------------------------------------------------------------------
-    merged = dtReorderSelectedOutput(merged);
+    merged = dtReorderSelectedOutput(merged, m_config.deploymentName);
     merged.write(selectedOutputFile.toStdString());
     std::cout << "[Runner] selected_output.csv merged: "
               << merged.size() << " series, "
