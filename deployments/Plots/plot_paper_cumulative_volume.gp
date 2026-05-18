@@ -64,18 +64,18 @@ set origin panel_x, panel_y(1)
 set size panel_w, panel_h
 set ylabel "Cumulative\ninflow\nvolume (m^3)"
 set label 1 "(a)" at graph 0.015,0.84 font "Helvetica,22" front
-plot truth_file      using (($5-25569)*86400):($6*dt_days) smooth cumulative with lines ls 1 notitle, \
-     assim_file      using (($5-25569)*86400):($6*dt_days) smooth cumulative with lines ls 2 notitle, \
-     reanalysis_file using (($5-25569)*86400):($6*dt_days) smooth cumulative with lines ls 3 notitle
+plot truth_file      using (($7-25569)*86400):($8*dt_days) smooth cumulative with lines ls 1 notitle, \
+     assim_file      using (($7-25569)*86400):($8*dt_days) smooth cumulative with lines ls 2 notitle, \
+     reanalysis_file using (($7-25569)*86400):($8*dt_days) smooth cumulative with lines ls 3 notitle
 
 # (b) cumulative infiltration volume
 set origin panel_x, panel_y(2)
 set size panel_w, panel_h
 set ylabel "Cumulative\ninfiltration\nvolume (m^3)"
 set label 1 "(b)" at graph 0.015,0.84 font "Helvetica,22" front
-plot truth_file      using (($13-25569)*86400):($14*dt_days) smooth cumulative with lines ls 1 notitle, \
-     assim_file      using (($13-25569)*86400):($14*dt_days) smooth cumulative with lines ls 2 notitle, \
-     reanalysis_file using (($13-25569)*86400):($14*dt_days) smooth cumulative with lines ls 3 notitle
+plot truth_file      using (($5-25569)*86400):($6*dt_days) smooth cumulative with lines ls 1 notitle, \
+     assim_file      using (($5-25569)*86400):($6*dt_days) smooth cumulative with lines ls 2 notitle, \
+     reanalysis_file using (($5-25569)*86400):($6*dt_days) smooth cumulative with lines ls 3 notitle
 
 # (c) cumulative underdrain volume
 set origin panel_x, panel_y(3)
@@ -85,9 +85,9 @@ set label 1 "(c)" at graph 0.015,0.84 font "Helvetica,22" front
 set format x "%Y-%m-%d"
 set xtics rotate by -30 offset 0,-0.3 font "Helvetica,18"
 set xlabel "Date" font "Helvetica,23" offset 0,-1.5
-plot truth_file      using (($3-25569)*86400):($4*dt_days) smooth cumulative with lines ls 1 notitle, \
-     assim_file      using (($3-25569)*86400):($4*dt_days) smooth cumulative with lines ls 2 notitle, \
-     reanalysis_file using (($3-25569)*86400):($4*dt_days) smooth cumulative with lines ls 3 notitle
+plot truth_file      using (($17-25569)*86400):($18*dt_days) smooth cumulative with lines ls 1 notitle, \
+     assim_file      using (($17-25569)*86400):($18*dt_days) smooth cumulative with lines ls 2 notitle, \
+     reanalysis_file using (($17-25569)*86400):($18*dt_days) smooth cumulative with lines ls 3 notitle
 
 unset multiplot
 unset output

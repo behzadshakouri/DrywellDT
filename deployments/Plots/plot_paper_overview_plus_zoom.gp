@@ -79,9 +79,9 @@ set label 1 "(a)" at graph 0.015,0.84 font "Helvetica,22" front
 set yrange [0:*]
 set arrow 11 from x0, graph 0 to x0, graph 1 nohead ls 5 front
 set arrow 12 from x1, graph 0 to x1, graph 1 nohead ls 5 front
-plot truth_file      using (($3-25569)*86400):4 with lines ls 1 notitle, \
-     assim_file      using (($3-25569)*86400):4 with lines ls 2 notitle, \
-     reanalysis_file using (($3-25569)*86400):4 with lines ls 3 notitle
+plot truth_file      using (($17-25569)*86400):18 with lines ls 1 notitle, \
+     assim_file      using (($17-25569)*86400):18 with lines ls 2 notitle, \
+     reanalysis_file using (($17-25569)*86400):18 with lines ls 3 notitle
 unset arrow 11
 unset arrow 12
 
@@ -94,7 +94,7 @@ set size panel_w, panel_h
 set ylabel "Precipitation\n(mm/day)"
 set label 1 "(b)" at graph 0.015,0.84 font "Helvetica,22" front
 set yrange [0:*]
-plot truth_file using (($1-25569)*86400):2 with impulses ls 4 notitle
+plot truth_file using (($13-25569)*86400):14 with impulses ls 4 notitle
 
 # (c) zoomed soil moisture
 set origin panel_x, panel_y(3)
@@ -102,9 +102,9 @@ set size panel_w, panel_h
 set ylabel "Soil moisture\nzoom (-)"
 set label 1 "(c)" at graph 0.015,0.84 font "Helvetica,22" front
 set yrange [0.31:0.38]
-plot truth_file      using (($17-25569)*86400):18 with linespoints ls 1 notitle, \
-     assim_file      using (($17-25569)*86400):18 with linespoints ls 2 notitle, \
-     reanalysis_file using (($17-25569)*86400):18 with lines       ls 3 notitle
+plot truth_file      using (($15-25569)*86400):16 with linespoints ls 1 notitle, \
+     assim_file      using (($15-25569)*86400):16 with linespoints ls 2 notitle, \
+     reanalysis_file using (($15-25569)*86400):16 with lines       ls 3 notitle
 
 # (d) zoomed underdrain flow
 set origin panel_x, panel_y(4)
@@ -115,9 +115,9 @@ set format x "%Y-%m-%d"
 set xtics rotate by -30 offset 0,-0.3 font "Helvetica,18"
 set xlabel "Date" font "Helvetica,23" offset 0,-1.5
 set yrange [0:*]
-plot truth_file      using (($3-25569)*86400):4 with linespoints ls 1 notitle, \
-     assim_file      using (($3-25569)*86400):4 with linespoints ls 2 notitle, \
-     reanalysis_file using (($3-25569)*86400):4 with lines       ls 3 notitle
+plot truth_file      using (($17-25569)*86400):18 with linespoints ls 1 notitle, \
+     assim_file      using (($17-25569)*86400):18 with linespoints ls 2 notitle, \
+     reanalysis_file using (($17-25569)*86400):18 with lines       ls 3 notitle
 
 unset multiplot
 unset output
