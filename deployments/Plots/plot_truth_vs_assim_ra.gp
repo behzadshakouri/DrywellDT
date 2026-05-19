@@ -49,7 +49,7 @@ set datafile separator ","
 set datafile commentschars "#t"   # skip header lines starting with 't' or '#'
 
 set terminal pngcairo size 1600,1200 enhanced font "Helvetica,11"
-set output "truth_vs_assim.png"
+set output "truth_vs_assim_ra.png"
 
 set multiplot layout 4,2 \
     title "Truth Twin vs Assimilation Twin vs Reanalysis — selected outputs" \
@@ -94,31 +94,31 @@ plot truth_file      using (($3-25569)*86400):4  with linespoints ls 1 title "tr
 # --- Panel 3: Overflow ---------------------------------------------------
 set title "Overflow (m^3/day)"
 set ylabel "m^3/day"
-plot truth_file      using (($5-25569)*86400):6  with linespoints ls 1 title "truth", \
-     assim_file      using (($5-25569)*86400):6  with linespoints ls 2 title "assim", \
-     reanalysis_file using (($5-25569)*86400):6  with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($9-25569)*86400):10  with linespoints ls 1 title "truth", \
+     assim_file      using (($9-25569)*86400):10  with linespoints ls 2 title "assim", \
+     reanalysis_file using (($9-25569)*86400):10  with linespoints ls 3 title "reanalysis"
 
 # --- Panel 4: Pond water depth -------------------------------------------
 set title "Pond water depth (m)"
 set ylabel "m"
-plot truth_file      using (($7-25569)*86400):8  with linespoints ls 1 title "truth", \
-     assim_file      using (($7-25569)*86400):8  with linespoints ls 2 title "assim", \
-     reanalysis_file using (($7-25569)*86400):8  with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($11-25569)*86400):12  with linespoints ls 1 title "truth", \
+     assim_file      using (($11-25569)*86400):12  with linespoints ls 2 title "assim", \
+     reanalysis_file using (($11-25569)*86400):12  with linespoints ls 3 title "reanalysis"
 
 # --- Panel 5: Precipitation ----------------------------------------------
 set title "Precipitation (mm/day)"
 set ylabel "mm/day"
-plot truth_file      using (($9-25569)*86400):10 with linespoints ls 1 title "truth", \
-     assim_file      using (($9-25569)*86400):10 with linespoints ls 2 title "assim", \
-     reanalysis_file using (($9-25569)*86400):10 with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($13-25569)*86400):14 with linespoints ls 1 title "truth", \
+     assim_file      using (($13-25569)*86400):14 with linespoints ls 2 title "assim", \
+     reanalysis_file using (($13-25569)*86400):14 with linespoints ls 3 title "reanalysis"
 
 # --- Panel 6: Underdrain flow --------------------------------------------
 # (reanalysis has Underdrain at cols 13:14 due to alphabetical ordering)
 set title "Underdrain flow (m^3/day)"
 set ylabel "m^3/day"
-plot truth_file      using (($11-25569)*86400):12 with linespoints ls 1 title "truth", \
-     assim_file      using (($11-25569)*86400):12 with linespoints ls 2 title "assim", \
-     reanalysis_file using (($13-25569)*86400):14 with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($17-25569)*86400):18 with linespoints ls 1 title "truth", \
+     assim_file      using (($17-25569)*86400):18 with linespoints ls 2 title "assim", \
+     reanalysis_file using (($17-25569)*86400):18 with linespoints ls 3 title "reanalysis"
 
 # --- Panel 7: Inflow to the pond -----------------------------------------
 # (reanalysis has inflow at cols 15:16 due to alphabetical ordering)
@@ -134,7 +134,7 @@ set title "Soil Moisture"
 set ylabel "(-)"
 plot truth_file      using (($15-25569)*86400):16 with linespoints ls 1 title "truth", \
      assim_file      using (($15-25569)*86400):16 with linespoints ls 2 title "assim", \
-     reanalysis_file using (($11-25569)*86400):12 with linespoints ls 3 title "reanalysis"
+     reanalysis_file using (($15-25569)*86400):16 with linespoints ls 3 title "reanalysis"
 
 unset multiplot
 unset output
