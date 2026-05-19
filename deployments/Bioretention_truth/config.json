@@ -3,7 +3,7 @@
         "name": "Bioretention_truth",
         "model_file": "model/Bioretention.ohq",
         "viz_file": "viz_bioretention.json",
-        "port": 8084
+        "port": 8086
     },
     "runtime": {
         "weather_source": "openmeteo_historical",
@@ -14,7 +14,8 @@
         "start_datetime": "2020-01-03T00:00:00",
         "stop_datetime": "",
         "time_acceleration": 200,
-        "state_variables": []
+        "state_variables": [],
+        "keep_debug_outputs": false
     },
     "observations": {
         "save_interval": "1hr",
@@ -27,7 +28,7 @@
             "Precipitation": 0.0,
             "Underdrain flow": 0.1,
             "inflow to the pond": 0.1,
-            "Soil Moisture": 0.05,
+            "Soil Moisture": 0.01,
             "Evaporation": 0.1
         },
         "noise_correlation_time": "6hr"

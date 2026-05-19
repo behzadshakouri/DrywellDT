@@ -15,15 +15,16 @@
         "stop_datetime": "",
         "time_acceleration": 200,
         "advance_to_observations": true,
-        "state_variables": []
+        "state_variables": [],
+        "keep_debug_outputs": false
     },
     "observations": {
         "save_interval": "1hr",
         "noise_sigma": 0.0
     },
     "assimilation": {
-        "truth_csv_url": "http://localhost:8084/outputs/selected_output.csv",
-        "truth_meta_url": "http://localhost:8084/outputs/selected_output_meta.json",
+        "truth_csv_url": "http://localhost:8086/outputs/selected_output.csv",
+        "truth_meta_url": "http://localhost:8086/outputs/selected_output_meta.json",
         "poll_interval": "3day",
         "calibration_output_dir": "outputs/calibration",
         "calibration_observations": [
