@@ -346,9 +346,9 @@ ENDSSH
     VIEW_STAGE="${BUNDLE_DIR}/viewers/${d}"
     rm -rf "${VIEW_STAGE}"
     mkdir -p "${VIEW_STAGE}"
-    cp "${VIEWER_BUILD}/DrywellDTViewer.html" \
-       "${VIEWER_BUILD}/DrywellDTViewer.js"   \
-       "${VIEWER_BUILD}/DrywellDTViewer.wasm" \
+    cp "${VIEWER_BUILD}/OHTwinViewer.html" \
+       "${VIEWER_BUILD}/OHTwinViewer.js"   \
+       "${VIEWER_BUILD}/OHTwinViewer.wasm" \
        "${VIEWER_BUILD}/qtloader.js"          \
        "${VIEWER_BUILD}/qtlogo.svg"           \
        "${VIEW_STAGE}/"
@@ -396,7 +396,7 @@ server {
     listen ${VIEW_PORT};
     server_name _;
     root /var/www/drywelldt/${ROLE};
-    index DrywellDTViewer.html;
+    index OHTwinViewer.html;
     location / {
         try_files \$uri \$uri/ =404;
         add_header Cross-Origin-Opener-Policy same-origin always;
@@ -443,7 +443,7 @@ for d in "${DEPLOYMENTS[@]}"; do
     op="${OUTPUTS_PORT[$d]}"
     vp="${VIEWER_PORT[$d]}"
     echo "  ${d} (${role}):"
-    echo "    Viewer:  http://${EC2_PUBLIC_IP}:${vp}/DrywellDTViewer.html"
+    echo "    Viewer:  http://${EC2_PUBLIC_IP}:${vp}/OHTwinViewer.html"
     echo "    Outputs: http://${EC2_PUBLIC_IP}:${op}/outputs/"
     echo
 done

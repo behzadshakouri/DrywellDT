@@ -1,6 +1,6 @@
 QT += core gui widgets charts network svg svgwidgets
 CONFIG += c++17
-TARGET   = DrywellDTViewer
+TARGET   = OHTwinViewer
 TEMPLATE = app
 
 SOURCES += \
