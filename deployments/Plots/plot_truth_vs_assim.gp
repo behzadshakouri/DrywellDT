@@ -86,17 +86,17 @@ set ylabel font "Helvetica,22" offset -1,0
 set origin panel_x, panel_y(1)
 set size   panel_w, panel_h
 set ylabel "Groundwater\nRecharge\n(m^3/day)"
-plot truth_file      using (($1-25569)*86400):2  with linespoints ls 1 notitle, \
-     assim_file      using (($1-25569)*86400):2  with linespoints ls 2 notitle, \
-     reanalysis_file using (($1-25569)*86400):2  with linespoints ls 3 notitle
+plot truth_file      using (($3-25569)*86400):4  with linespoints ls 1 notitle, \
+     assim_file      using (($3-25569)*86400):4  with linespoints ls 2 notitle, \
+     reanalysis_file using (($3-25569)*86400):4  with linespoints ls 3 notitle
 
 # ---------- Panel 2: Infiltration rate ----------
 set origin panel_x, panel_y(2)
 set size   panel_w, panel_h
 set ylabel "Infiltration\nrate\n(m^3/day)"
-plot truth_file      using (($3-25569)*86400):4  with linespoints ls 1 notitle, \
-     assim_file      using (($3-25569)*86400):4  with linespoints ls 2 notitle, \
-     reanalysis_file using (($3-25569)*86400):4  with linespoints ls 3 notitle
+plot truth_file      using (($5-25569)*86400):6  with linespoints ls 1 notitle, \
+     assim_file      using (($5-25569)*86400):6  with linespoints ls 2 notitle, \
+     reanalysis_file using (($5-25569)*86400):6  with linespoints ls 3 notitle
 
 # ---------- Panel 3: Overflow ----------
 set origin panel_x, panel_y(3)
@@ -124,7 +124,7 @@ plot truth_file      using (($13-25569)*86400):14 with linespoints ls 1 notitle,
      assim_file      using (($13-25569)*86400):14 with linespoints ls 2 notitle, \
      reanalysis_file using (($13-25569)*86400):14 with linespoints ls 3 notitle
 
-# ---------- Panel 6: Underdrain flow  ----------
+# ---------- Panel 6: Underdrain flow (reanalysis cols 13:14) ----------
 set origin panel_x, panel_y(6)
 set size   panel_w, panel_h
 set ylabel "Underdrain\nflow (m^3/day)"
@@ -132,7 +132,7 @@ plot truth_file      using (($17-25569)*86400):18 with linespoints ls 1 notitle,
      assim_file      using (($17-25569)*86400):18 with linespoints ls 2 notitle, \
      reanalysis_file using (($17-25569)*86400):18 with linespoints ls 3 notitle
 
-# ---------- Panel 7: Inflow to pond  ----------
+# ---------- Panel 7: Inflow to pond (reanalysis cols 15:16) ----------
 set origin panel_x, panel_y(7)
 set size   panel_w, panel_h
 set ylabel "Inflow to\npond (m^3/day)"
@@ -140,7 +140,7 @@ plot truth_file      using (($7-25569)*86400):8 with linespoints ls 1 notitle, \
      assim_file      using (($7-25569)*86400):8 with linespoints ls 2 notitle, \
      reanalysis_file using (($7-25569)*86400):8 with linespoints ls 3 notitle
 
-# ---------- Panel 8 (bottom): Soil Moisture  ----------
+# ---------- Panel 8 (bottom): Soil Moisture (reanalysis cols 11:12) ----------
 set origin panel_x, panel_y(8)
 set size   panel_w, panel_h
 set ylabel "Soil\nmoisture (-)"

@@ -86,16 +86,16 @@ set style line 3 lc rgb "#2ca02c" lw 2 pt 7 ps 0.4   # reanalysis (green)
 # --- Panel 1: Groundwater Recharge ---------------------------------------
 set title "Groundwater Recharge (m^3/day)" font "Helvetica,18"
 set ylabel "m^3/day" font "Helvetica,16"
-plot truth_file      using (($1-25569)*86400):2  with linespoints ls 1 title "truth", \
-     assim_file      using (($1-25569)*86400):2  with linespoints ls 2 title "assim", \
-     reanalysis_file using (($1-25569)*86400):2  with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($3-25569)*86400):4  with linespoints ls 1 title "truth", \
+     assim_file      using (($3-25569)*86400):4  with linespoints ls 2 title "assim", \
+     reanalysis_file using (($3-25569)*86400):4  with linespoints ls 3 title "reanalysis"
 
 # --- Panel 2: Infiltration rate ------------------------------------------
 set title "Infiltration rate (m^3/day)" font "Helvetica,18"
 set ylabel "m^3/day" font "Helvetica,16"
-plot truth_file      using (($3-25569)*86400):4  with linespoints ls 1 title "truth", \
-     assim_file      using (($3-25569)*86400):4  with linespoints ls 2 title "assim", \
-     reanalysis_file using (($3-25569)*86400):4  with linespoints ls 3 title "reanalysis"
+plot truth_file      using (($5-25569)*86400):6  with linespoints ls 1 title "truth", \
+     assim_file      using (($5-25569)*86400):6  with linespoints ls 2 title "assim", \
+     reanalysis_file using (($5-25569)*86400):6  with linespoints ls 3 title "reanalysis"
 
 # --- Panel 3: Overflow ---------------------------------------------------
 set title "Overflow (m^3/day)" font "Helvetica,18"
