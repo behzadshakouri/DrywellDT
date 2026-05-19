@@ -19,7 +19,7 @@ set style line 2 lc rgb "#d62728" lw 1.4 pt 7 ps 0.25
 set style line 3 lc rgb "#2ca02c" lw 1.4 pt 7 ps 0.25
 
 set terminal pngcairo size 1500,2100 enhanced font "Helvetica,13"
-set output "truth_vs_assim_ra.png"
+set output "truth_vs_assim_9_rows.png"
 set multiplot layout 9,1 title "Truth twin    Assimilation twin    Reanalysis" font "Helvetica,17"
 set key horizontal outside top center
 
@@ -105,4 +105,4 @@ plot \
      reanalysis_file using (($1-25569)*86400):(column(" Underdrain flow (m3/day)")) with linespoints ls 3 title "Reanalysis"
 
 unset multiplot
-print "Wrote truth_vs_assim_ra.png"
+print "Wrote truth_vs_assim_9_rows.png"

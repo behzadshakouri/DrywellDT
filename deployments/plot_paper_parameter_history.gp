@@ -90,6 +90,9 @@ set rmargin at screen right_x
 # ---------- Panel (a): EngineeredSoilKsat ----------
 set tmargin at screen top_a
 set bmargin at screen bot_a
+unset logscale y
+set format y "%g"
+set yrange [0:*]
 set ylabel "Engineered\nSoil K_{sat} [m/day]"
 set label 1 "(a)" at graph 0.015, 0.86 font "Helvetica,22" front
 plot truth_EngK with lines ls 2 notitle, \
@@ -98,6 +101,9 @@ plot truth_EngK with lines ls 2 notitle, \
 # ---------- Panel (b): NativeSoilAlpha ----------
 set tmargin at screen top_b
 set bmargin at screen bot_b
+unset logscale y
+set format y "%g"
+set yrange [0:*]
 set ylabel "Native\nSoil α [1/m]"
 set label 1 "(b)" at graph 0.015, 0.86 font "Helvetica,22" front
 plot truth_NSAlph with lines ls 2 notitle, \
