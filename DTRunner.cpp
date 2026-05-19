@@ -122,10 +122,10 @@ static bool dtNeedsCustomOrdering(const std::string &deploymentName)
     // Keep historical custom viewer ordering only for these deployments.
     // All other models preserve the original OHQ observation/output order.
     return d == "vn"
-        || d == "vn_drywell"
-        || d == "r"
-        || d == "hq"
-        || d == "hq_drywell";
+           || d == "vn_drywell"
+           || d == "r"
+           || d == "hq"
+           || d == "hq_drywell";
 }
 
 static TimeSeriesSet<double> dtReorderSelectedOutput(
@@ -494,8 +494,19 @@ bool DTRunner::runOnce()
         }
         else
         {
-            // Already at or past the frontier — fall back to fixed interval
-            advanceEnd = advanceStart.addMSecs(m_config.intervalMs);
+            // Assim is already at or past the observation frontier. Don't
+            // advance simulated time — wait for truth to publish more data
+            // before doing any forward work. No state snapshot, no output
+            // file, no viz update this cycle. The next QTimer tick will
+            // re-check the buffer.
+            const double daysAhead =
+                tMaxDt.msecsTo(advanceStart) / 86400000.0;
+            std::cout << "[Runner] waiting for observations (assim at "
+                      << advanceStart.toString(Qt::ISODate).toStdString()
+                      << ", buffer t_max = "
+                      << tMaxDt.toString(Qt::ISODate).toStdString()
+                      << ", " << daysAhead << " days ahead). Skipping cycle.\n";
+            return true;
         }
     }
     else
