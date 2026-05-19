@@ -1,10 +1,9 @@
-loadtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
-addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/main_components.json
-addtemplate; filename = /home/arash/Projects/OpenHydroQual/resources/main_components.json
-addtemplate; filename = /home/arash/Projects/OpenHydroQual/resources/unsaturated_soil.json
-addtemplate; filename = /home/arash/Projects/OpenHydroQual/resources/Pond_Plugin.json
-addtemplate; filename = /home/arash/Projects/OpenHydroQual/resources/Sewer_system.json
-addtemplate; filename = /home/arash/Projects/OpenHydroQual/build/Desktop_Qt_6_8_2-Release/../../resources/soil_evapotranspiration_models.json
+loadtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/main_components.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/unsaturated_soil.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Pond_Plugin.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/Sewer_system.json
+addtemplate; filename = /mnt/3rd900/Projects/OpenHydroQual/build/Release/../../resources/soil_evapotranspiration_models.json
 setvalue; object=system, quantity=acceptance_rate, value=0.15
 setvalue; object=system, quantity=add_noise_to_realizations, value=No
 setvalue; object=system, quantity=continue_based_on_file_name, value=
@@ -71,7 +70,7 @@ create link;from=Native soil underneath the engineered soil(0:0),to=Native soil 
 create link;from=Native soil underneath the engineered soil(0:1),to=Native soil underneath the engineered soil(0:2),type=soil_to_soil_link,name=Native soil underneath the engineered soil(0:1)-Native soil underneath the engineered soil(0:2)
 create link;from=Pond,to=Catch Basin,type=wier,alpha=10000,beta=2.5,crest_elevation=0.2,name=Overflow
 create link;from=Native soil underneath the engineered soil(0:2),to=Groundwater,type=soil_to_fixedhead_link,name=Soil to Groundwater(0)
-create link;from=Aggregate storage,to=Catch Basin,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.2,end_elevation=-1.4,length=10,name=Underdrain,start_elevation=-1.1
+create link;from=Aggregate storage,to=Catch Basin,type=Sewer_pipe,ManningCoeff=0.011,diameter=0.2,end_elevation=-0.5,length=10,name=Underdrain,start_elevation=-1.1
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=(0-Evapotranspiration),kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Evaporation,object=Engineered soil,observed_data=
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Groundwater Recharge (m3/day),object=Soil to Groundwater(0),observed_data=
 create observation;type=Observation,autocorrelation_time-span=1,comparison_method=Least Squared,error_standard_deviation=1,error_structure=normal,expression=flow,kernel_Delta0=1,kernel_alpha=1,kernel_tau=1,name=Infiltration rate (m3/day),object=Bioswale pond to soil,observed_data=
