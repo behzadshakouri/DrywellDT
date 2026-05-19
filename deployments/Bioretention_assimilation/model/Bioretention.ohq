@@ -87,3 +87,5 @@ setasparameter; object= Native soil underneath the engineered soil(0:1), paramet
 setasparameter; object= Native soil underneath the engineered soil(0:1), parametername= NativeSoilAlpha, quantity= alpha
 setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoilKsat, quantity= K_sat_original
 setasparameter; object= Native soil underneath the engineered soil(0:2), parametername= NativeSoilAlpha, quantity= alpha
+setasparameter; object= Evapotranspiration_Penman (Soil), parametername= Evap_Coeff, quantity= solar_scale_fact
+setasparameter; object= Evapotranspiration_Penman (Soil), parametername= Evap_Coeff, quantity= wind_scale_fact
